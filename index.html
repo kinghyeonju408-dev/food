@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>푸드스펜드 - 종합 데모 v5</title>
+<style>
+  :root{
+    --paper:#FAFAF4; --paper-shadow:#E9E7DA; --ink:#2B2B26; --ink-soft:#6B675C;
+    --line:#CFC9B6; --shelf-green:#3F6B4F; --shelf-green-soft:#EAF1EC;
+    --alert-red:#B23A2E; --alert-red-soft:#F7E9E6; --caution-amber:#B4791E;
+    --caution-amber-soft:#FBF0DD; --stamp-blue:#2E5E7A; --fresh:#4C7A5A; --processed:#B4653E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:linear-gradient(180deg,#EFEDE2,#E4E1D2);
+    font-family:-apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    color:var(--ink);padding:40px 16px 80px;min-height:100vh;}
+  .mono{font-family:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;}
+  .wrap{max-width:980px;margin:0 auto;}
+  header{text-align:center;margin-bottom:24px;}
+  header .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--shelf-green);font-weight:600;margin-bottom:10px;}
+  header h1{font-size:24px;margin:0 0 8px;letter-spacing:-.01em;}
+  header p{color:var(--ink-soft);font-size:13.5px;margin:0 auto;max-width:600px;}
+
+  .pipeline{display:flex;align-items:center;justify-content:center;gap:0;margin:0 auto 24px;max-width:560px;}
+  .step{flex:1;text-align:center;position:relative;font-family:"IBM Plex Mono",monospace;}
+  .step .dot{width:26px;height:26px;border-radius:50%;background:#D8D3C4;color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin:0 auto 6px;position:relative;z-index:2;}
+  .step.done .dot{background:var(--ink-soft);}
+  .step.active .dot{background:var(--shelf-green);box-shadow:0 0 0 4px var(--shelf-green-soft);}
+  .step .lab{font-size:10px;color:var(--ink-soft);}
+  .step.active .lab{color:var(--shelf-green);font-weight:700;}
+  .step::before{content:'';position:absolute;top:13px;left:-50%;width:100%;height:2px;background:#D8D3C4;z-index:1;}
+  .step:first-child::before{display:none;}
+
+  .sensitivity{background:var(--paper);border:1px solid var(--paper-shadow);border-radius:10px;
+    padding:18px 22px;margin-bottom:20px;}
+  .sensitivity h2{font-size:14.5px;margin:0 0 3px;}
+  .sensitivity .sub{font-size:12px;color:var(--ink-soft);margin:0 0 14px;}
+  .slider-row{display:grid;grid-template-columns:170px 1fr 90px;align-items:center;gap:12px;margin-bottom:10px;}
+  .slider-row label{font-size:12.5px;font-weight:600;}
+  .slider-row input[type=range]{width:100%;accent-color:var(--shelf-green);}
+  .slider-row .val{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--shelf-green);font-weight:700;text-align:right;}
+  .sensitivity .note{font-size:11.3px;color:var(--ink-soft);margin-top:6px;}
+  .sensitivity hr{border:none;border-top:1px dashed var(--line);margin:14px 0;}
+
+  .household-row{display:grid;grid-template-columns:170px 1fr 90px;align-items:center;gap:12px;}
+  .household-row label{font-size:12.5px;font-weight:600;}
+  .household-row input[type=range]{width:100%;accent-color:var(--stamp-blue);}
+  .household-row .val{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--stamp-blue);font-weight:700;text-align:right;}
+
+  .stage{display:grid;grid-template-columns:1fr;gap:26px;}
+  @media(min-width:860px){ .stage{grid-template-columns:380px 1fr;} }
+
+  .receipt-holder{position:relative;}
+  .receipt{background:var(--paper);padding:24px 22px 32px;
+    box-shadow:0 18px 40px -18px rgba(0,0,0,.35), 0 2px 0 var(--paper-shadow);position:relative;
+    clip-path:polygon(0% 0%,100% 0%,100% 97%,96% 100%,92% 97%,88% 100%,84% 97%,80% 100%,76% 97%,72% 100%,
+      68% 97%,64% 100%,60% 97%,56% 100%,52% 97%,48% 100%,44% 97%,40% 100%,36% 97%,32% 100%,28% 97%,
+      24% 100%,20% 97%,16% 100%,12% 97%,8% 100%,4% 97%,0% 100%);}
+  .receipt .shop{text-align:center;font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.04em;}
+  .receipt .shop b{display:block;font-size:14.5px;margin-bottom:2px;}
+  .receipt hr{border:none;border-top:1px dashed var(--line);margin:11px 0;}
+  .rline{display:grid;grid-template-columns:1fr auto;gap:1px 10px;font-family:"IBM Plex Mono",monospace;
+    font-size:11.5px;padding:8px 0;border-bottom:1px dashed var(--line);transition:background .3s ease;}
+  .rline .brand{grid-column:1/2;color:var(--ink-soft);font-size:10.3px;}
+  .rline .name{grid-column:1/2;font-weight:600;}
+  .rline .price{grid-column:2/3;text-align:right;color:var(--ink-soft);align-self:start;}
+  .rline .qty{grid-column:1/3;font-size:10.3px;color:var(--ink-soft);margin-top:1px;}
+  .rline .perperson{grid-column:1/3;font-size:10.3px;color:var(--stamp-blue);margin-top:1px;}
+  .rline.active{background:var(--shelf-green-soft);}
+  .rline.flag-high{background:var(--alert-red-soft);}
+  .rline.flag-caution{background:var(--caution-amber-soft);}
+  .rline .tag{display:none;font-size:10.3px;font-weight:700;margin-top:3px;}
+  .rline.done .tag{display:block;}
+  .rline.flag-high .tag{color:var(--alert-red);}
+  .rline.flag-caution .tag{color:var(--caution-amber);}
+  .rline.flag-safe .tag{color:var(--shelf-green);}
+  .receipt .total{display:flex;justify-content:space-between;font-family:"IBM Plex Mono",monospace;
+    font-size:13px;font-weight:700;margin-top:10px;}
+
+  .stamp{position:absolute;top:34%;right:-14px;border:3px solid var(--alert-red);color:var(--alert-red);
+    border-radius:10px;padding:8px 12px;font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:12.5px;
+    transform:rotate(-11deg);opacity:0;transition:opacity .4s ease,border-color .3s ease,color .3s ease;
+    background:rgba(250,250,244,.9);pointer-events:none;text-align:center;line-height:1.3;}
+  .stamp.show{opacity:1;}
+  .stamp.safe{border-color:var(--shelf-green);color:var(--shelf-green);}
+  .stamp small{display:block;font-size:9px;font-weight:600;letter-spacing:.07em;}
+
+  .panel{display:flex;flex-direction:column;gap:16px;}
+  .btn{align-self:flex-start;background:var(--shelf-green);color:#fff;border:none;
+    padding:11px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;
+    box-shadow:0 6px 14px -6px rgba(63,107,79,.6);}
+  .btn:disabled{background:#A9A392;cursor:default;box-shadow:none;}
+  .btn:hover:not(:disabled){background:#345a41;}
+  .btn.small{padding:6px 12px;font-size:11.5px;box-shadow:none;align-self:auto;}
+
+  .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .metric{background:var(--paper);padding:13px 10px;border-radius:8px;border:1px solid var(--paper-shadow);text-align:center;}
+  .metric .num{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:700;}
+  .metric .lab{font-size:10.3px;color:var(--ink-soft);margin-top:2px;line-height:1.3;}
+  .metric.red .num{color:var(--alert-red);} .metric.green .num{color:var(--shelf-green);} .metric.blue .num{color:var(--stamp-blue);}
+
+  .swap-header{font-size:11.5px;color:var(--ink-soft);margin:-6px 0 -4px;}
+  .swap{background:var(--paper);border:1px solid var(--paper-shadow);border-radius:8px;padding:13px 14px;
+    font-size:12.8px;opacity:0;transform:translateY(8px);transition:opacity .4s ease, transform .4s ease;}
+  .swap.show{opacity:1;transform:translateY(0);}
+  .swap .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .swap .from b{color:var(--alert-red);} .swap .to b{color:var(--shelf-green);}
+  .swap .arrow{font-family:"IBM Plex Mono",monospace;color:var(--ink-soft);}
+  .swap .note{font-size:11.5px;color:var(--ink-soft);margin-top:5px;}
+  .swap .deltas{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;align-items:center;}
+  .pill{font-family:"IBM Plex Mono",monospace;font-size:10.8px;font-weight:700;padding:2px 7px;border-radius:4px;}
+  .pill.cost-down{background:var(--shelf-green-soft);color:var(--shelf-green);}
+  .pill.cost-up{background:var(--alert-red-soft);color:var(--alert-red);}
+  .pill.nutrient{background:#EAF0F5;color:var(--stamp-blue);}
+
+  .empty-note{color:var(--ink-soft);font-size:13px;padding:20px 0;text-align:center;}
+
+  .ledger{background:var(--paper);border:1px solid var(--paper-shadow);border-radius:10px;padding:22px 24px;margin-top:26px;}
+  .ledger h2{font-size:16px;margin:0 0 4px;} .ledger .sub{font-size:12.5px;color:var(--ink-soft);margin:0 0 16px;}
+  .catbar{display:flex;height:34px;border-radius:6px;overflow:hidden;margin-bottom:14px;box-shadow:inset 0 0 0 1px var(--paper-shadow);}
+  .catbar .seg{display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono",monospace;
+    font-size:10.5px;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;}
+  .catlegend{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px 16px;}
+  .catlegend .item{display:flex;align-items:center;gap:8px;font-size:12.5px;}
+  .catlegend .dot{width:10px;height:10px;border-radius:3px;flex:none;}
+  .catlegend .amt{margin-left:auto;font-family:"IBM Plex Mono",monospace;color:var(--ink-soft);}
+  .insight{margin-top:16px;padding:12px 14px;border-radius:8px;background:var(--alert-red-soft);
+    font-size:12.8px;color:var(--ink);border-left:3px solid var(--alert-red);}
+  .insight b{color:var(--alert-red);}
+
+  .trend{background:var(--paper);border:1px solid var(--paper-shadow);border-radius:10px;padding:22px 24px;margin-top:20px;}
+  .trend h2{font-size:16px;margin:0 0 4px;} .trend .sub{font-size:12.5px;color:var(--ink-soft);margin:0 0 20px;}
+  .trend-chart{display:flex;justify-content:space-around;align-items:flex-end;height:180px;gap:14px;padding:0 10px;}
+  .month-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;max-width:90px;}
+  .month-bar{width:100%;height:150px;display:flex;flex-direction:column-reverse;border-radius:6px 6px 0 0;overflow:hidden;
+    box-shadow:inset 0 0 0 1px var(--paper-shadow);}
+  .month-bar .seg{width:100%;}
+  .month-bar .seg.processed{background:var(--processed);}
+  .month-bar .seg.fresh{background:var(--fresh);}
+  .month-pct{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:700;margin-top:8px;color:var(--processed);}
+  .month-lab{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+  .trend-legend{display:flex;gap:18px;justify-content:center;margin-top:16px;font-size:11.5px;color:var(--ink-soft);}
+  .trend-legend .dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px;}
+  .trend-add{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:20px;flex-wrap:wrap;
+    border-top:1px dashed var(--line);padding-top:16px;}
+  .trend-add input{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:7px 9px;border:1px solid var(--paper-shadow);
+    border-radius:6px;background:#fff;}
+  .trend-add input#newMonthLabel{width:70px;}
+  .trend-add input#newMonthPct{width:150px;}
+  .trend-add .hint{font-size:11px;color:var(--ink-soft);width:100%;text-align:center;margin-top:4px;}
+
+  .care{background:var(--paper);border:1px solid var(--paper-shadow);border-radius:10px;padding:24px;margin-top:20px;
+    display:grid;grid-template-columns:200px 1fr;gap:26px;align-items:center;}
+  @media(max-width:640px){ .care{grid-template-columns:1fr;} }
+  .phone{width:200px;height:400px;background:#1c1c1a;border-radius:28px;padding:10px;margin:0 auto;box-shadow:0 14px 30px -12px rgba(0,0,0,.4);}
+  .phone-screen{background:var(--paper);height:100%;border-radius:20px;padding:16px 12px;display:flex;flex-direction:column;gap:10px;}
+  .phone-head{font-size:11px;font-weight:700;color:var(--stamp-blue);text-align:center;font-family:"IBM Plex Mono",monospace;}
+  .phone-msg{font-size:11.5px;line-height:1.5;background:var(--alert-red-soft);border-radius:8px;padding:9px 10px;}
+  .phone-msg b{color:var(--alert-red);}
+  .phone-stats{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--ink-soft);text-align:center;}
+  .phone-btn{margin-top:auto;background:var(--shelf-green);color:#fff;border:none;border-radius:8px;
+    padding:9px 6px;font-size:11px;font-weight:700;font-family:inherit;}
+  .care-copy h2{font-size:16px;margin:0 0 8px;} .care-copy p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0;}
+  .care-copy .badge{display:inline-block;margin-top:10px;font-family:"IBM Plex Mono",monospace;font-size:11px;
+    background:var(--shelf-green-soft);color:var(--shelf-green);padding:3px 8px;border-radius:5px;font-weight:700;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,18,14,.5);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal-card{background:var(--paper);border-radius:12px;padding:24px;max-width:360px;width:100%;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.5);}
+  .modal-card h3{margin:0 0 14px;font-size:15px;}
+  .modal-row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line);}
+  .modal-row.total{font-weight:700;border-bottom:none;padding-top:10px;}
+  .modal-fee{margin-top:12px;padding:10px 12px;background:var(--shelf-green-soft);border-radius:8px;
+    font-size:11.8px;color:var(--shelf-green);}
+  .modal-close{margin-top:16px;width:100%;padding:10px;border:none;border-radius:6px;background:var(--ink);
+    color:#fff;font-family:inherit;font-size:13px;cursor:pointer;}
+
+  .disclaimer{margin-top:26px;font-size:11.2px;color:var(--ink-soft);text-align:center;max-width:720px;
+    margin-left:auto;margin-right:auto;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">FoodSpend · Prototype Demo v5</div>
+    <h1>영수증 한 장에서 시작하는 식비 가계부 + 건강 케어</h1>
+    <p>위험 판정은 "장바구니 전체를 혼자 다 먹는다"가 아니라 <b>1회 섭취량 기준</b>으로 계산합니다. 가구원수를 조절하면 나눠 먹을 때의 1인당 몫도 함께 보여줘요.</p>
+  </header>
+
+  <div class="pipeline" id="pipeline"></div>
+
+  <div class="sensitivity">
+    <h2>🎚️ 나만의 건강 민감도 설정</h2>
+    <p class="sub">아래 기준은 <b>"1회 섭취 시"</b> 값이에요. 예: 콜라 1캔, 라면 1봉지처럼 한 번에 먹는 양을 기준으로 판정합니다.</p>
+    <div class="slider-row">
+      <label>당류 고위험 기준(1회)</label>
+      <input type="range" id="sugarSlider" min="10" max="60" value="25" oninput="onSliderChange()">
+      <div class="val" id="sugarVal">25g</div>
+    </div>
+    <div class="slider-row">
+      <label>나트륨 고위험 기준(1회)</label>
+      <input type="range" id="sodiumSlider" min="200" max="1800" step="50" value="800" oninput="onSliderChange()">
+      <div class="val" id="sodiumVal">800mg</div>
+    </div>
+    <p class="note">주의 기준은 고위험 기준의 40%로 자동 설정돼요. 신선식품(계란·과일)은 기준과 무관하게 항상 안전군으로 분류합니다.</p>
+    <hr>
+    <div class="household-row">
+      <label>👪 가구원수</label>
+      <input type="range" id="householdSlider" min="1" max="6" value="2" oninput="onHouseholdChange()">
+      <div class="val" id="householdVal">2명</div>
+    </div>
+    <p class="note">여러 개 들어있는 상품(초코파이 12입 등)을 이 인원수로 나누면 1인당 몇 회분인지 영수증에 참고로 표시돼요. (위험 판정에는 반영되지 않는 참고 정보예요 — 판정은 항상 "1회 섭취량" 기준입니다)</p>
+  </div>
+
+  <div class="stage">
+    <div class="receipt-holder">
+      <div class="receipt" id="receipt">
+        <div class="shop"><b>행복마트 계산대 3</b>2026-07-31&nbsp;&nbsp;19:42</div>
+        <hr>
+        <div id="lines"></div>
+        <div class="total"><span>합계</span><span id="totalPrice">-</span></div>
+      </div>
+      <div class="stamp" id="stamp">대사 위험군<small>METABOLIC RISK</small></div>
+    </div>
+
+    <div class="panel">
+      <button class="btn" id="analyzeBtn" onclick="runAnalysis()">🧾 영수증 분석하기</button>
+
+      <div class="summary-grid" id="summary" style="display:none;">
+        <div class="metric red"><div class="num" id="mSugar">-</div><div class="lab">품목당 1회씩 다 먹으면<br>하루 당류 권장량 대비</div></div>
+        <div class="metric blue"><div class="num" id="mSodium">-</div><div class="lab">품목당 1회씩 다 먹으면<br>하루 나트륨 목표 대비</div></div>
+        <div class="metric green"><div class="num" id="mCost">-</div><div class="lab">전체 대체 시<br>비용 변화</div></div>
+      </div>
+
+      <div id="swapArea"><div class="empty-note">분석하기를 누르면 품목별 대체 추천과 절감 내역이 여기에 표시됩니다.</div></div>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <h2>이번 영수증의 식비 카테고리 분포</h2>
+    <p class="sub">가계부의 핵심 기능 — 같은 "식비"라도 무엇에 쓰고 있는지 자동 분류합니다.</p>
+    <div class="catbar" id="catbar"></div>
+    <div class="catlegend" id="catlegend"></div>
+    <div class="insight" id="catInsight"></div>
+  </div>
+
+  <div class="trend">
+    <h2>월별 가공식품 vs 신선식품 지출 추이</h2>
+    <p class="sub">몇 달치 가계부가 쌓이면 소비 습관이 개선되는지 한눈에 보여줍니다. 직접 새로운 달 데이터를 추가해보세요.</p>
+    <div class="trend-chart" id="trendChart"></div>
+    <div class="trend-legend">
+      <span><span class="dot" style="background:var(--processed)"></span>가공식품·고당류/고나트륨</span>
+      <span><span class="dot" style="background:var(--fresh)"></span>신선식품</span>
+    </div>
+    <div class="trend-add">
+      <input type="text" id="newMonthLabel" placeholder="예: 8월">
+      <input type="number" id="newMonthPct" placeholder="가공식품 비중(%)" min="0" max="100">
+      <button class="btn small" onclick="addMonth()">+ 이번 달 추가</button>
+      <div class="hint">가상의 다음 달 데이터를 넣어 추이가 어떻게 바뀌는지 시연해볼 수 있어요. (6개월 넘어가면 오래된 달부터 제거)</div>
+    </div>
+  </div>
+
+  <div class="care">
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="phone-head">👨‍👩‍👧 자녀 공유 알림</div>
+        <div class="phone-msg"><b>어머니</b>의 이번 주 장바구니가 <b>대사 위험군</b>으로 분석됐어요.</div>
+        <div class="phone-stats">1회 섭취 기준 당류 155% · 나트륨 115%</div>
+        <button class="phone-btn">🎁 건강 케어푸드 구독 선물하기</button>
+      </div>
+    </div>
+    <div class="care-copy">
+      <h2>효도 케어 공유</h2>
+      <p>부모님 계정의 영양 위험도 분석 결과를 자녀 앱으로 공유하고, 맞춤 저당·저나트륨 식단 구독을 대신 결제할 수 있는 화면입니다.</p>
+      <span class="badge">Secondary 고객 · 5060 시니어 & 3040 자녀</span>
+    </div>
+  </div>
+
+  <p class="disclaimer">
+    * 코카콜라·오리온 초코파이·농심 신라면의 1회 섭취량 기준 열량·당류·나트륨 수치는 제조사 공개 영양표시 및 유통 상품정보를 참고한 예시이며,
+    소시지·계란·바나나·설탕 등 일부 항목은 일반적으로 알려진 1회 섭취량 평균값을 사용했습니다. 하루 권장량은 당류 50g·나트륨 2,000mg을 기준값으로
+    사용한 것으로, 개인 특성에 따라 실제 권장량은 달라질 수 있습니다. 위험 기준 슬라이더 기본값·가구원수 나눔 계산·월별 트렌드·수수료율·효도 케어 문구는
+    시연용 가상 설정입니다. 실제 서비스에서는 식품의약품안전처 국가표준식품성분DB, 실 거래 마이데이터, 보건 전문가 자문 기반 위험 지표로 대체됩니다.
+  </p>
+</div>
+
+<div class="modal-overlay" id="commerceModal" onclick="if(event.target===this) closeModal()">
+  <div class="modal-card">
+    <h3 id="modalTitle">대체 상품 결제</h3>
+    <div class="modal-row"><span>상품가</span><span id="modalPrice">-</span></div>
+    <div class="modal-row"><span>결제 방식</span><span>간편결제 (카드)</span></div>
+    <div class="modal-row total"><span>총 결제금액</span><span id="modalTotal">-</span></div>
+    <div class="modal-fee" id="modalFee"></div>
+    <button class="modal-close" onclick="closeModal()">닫기</button>
+  </div>
+</div>
+
+<script>
+const CATS = {
+  "음료":{color:"#B4653E"}, "과자·디저트":{color:"#C08A2E"}, "조미료·당류":{color:"#A85A4E"},
+  "즉석식품·면류":{color:"#8C5A3C"}, "육가공품":{color:"#C4784F"},
+  "신선식품(단백질)":{color:"#4C7A5A"}, "신선식품(과일)":{color:"#6E9C6F"},
+};
+
+// perServing: 1회 섭취량 기준 영양성분 (총 구매량이 아닌, 실제로 한 번에 먹는 표준량)
+const ITEMS = [
+  {brand:"코카콜라음료", name:"코카콜라 355ml", price:4000, category:"음료",
+   unitsPurchased:2, unitLabel:"캔", servingLabel:"1캔(355ml)",
+   perServing:{kcal:160, sugar:39, sodium:21},
+   swap:{brand:"코카콜라음료", to:"코카콜라 제로 355ml 2캔", price:4000, sugarDelta:78, sodiumDelta:-2,
+     note:"이번에 산 2캔 전체를 제로로 바꾸면 당류 78g을 전량 줄이고 카페인·탄산감은 그대로 유지해요.", buyable:true}},
+
+  {brand:"오리온", name:"초코파이", price:4200, category:"과자·디저트",
+   unitsPurchased:12, unitLabel:"개", servingLabel:"1개(39g)",
+   perServing:{kcal:171, sugar:12, sodium:90},
+   swap:{brand:"예시 저당 제품", to:"저당 오트그래놀라바 12개입", price:6000, sugarDelta:96, sodiumDelta:520,
+     note:"박스 전체(12개)를 그래놀라바로 바꾸면 당류 96g, 나트륨 520mg을 줄일 수 있어요. 다만 총 비용은 늘어요.", buyable:true}},
+
+  {brand:"CJ제일제당", name:"백설 하얀설탕", price:3000, category:"조미료·당류",
+   unitsPurchased:100, unitLabel:"회분", servingLabel:"1큰술(10g)", isBulk:true,
+   perServing:{kcal:39, sugar:10, sodium:0},
+   swap:{brand:"예시 대체감미료", to:"알룰로스 1kg", price:9000, sugarDelta:970, sodiumDelta:0,
+     note:"1kg 전체를 알룰로스로 바꾸면 체내에 흡수되는 당이 거의 사라져요. 다만 설탕보다 3배가량 비싸요.", buyable:true}},
+
+  {brand:"농심", name:"신라면", price:4500, category:"즉석식품·면류",
+   unitsPurchased:5, unitLabel:"봉지", servingLabel:"1봉지(120g)",
+   perServing:{kcal:500, sugar:4, sodium:1790},
+   swap:{brand:"습관 개선 팁", to:"수프 60%만 사용", price:4500, sugarDelta:0, sodiumDelta:716,
+     note:"나트륨의 70~80%가 스프에 있어요. 스프를 60%만 넣으면 1봉지 기준 나트륨을 약 716mg(40%) 줄일 수 있어요.", buyable:false}},
+
+  {brand:"하림", name:"프랑크소시지", price:5900, category:"육가공품",
+   unitsPurchased:5, unitLabel:"회분(2개)", servingLabel:"2개(약 40g)",
+   perServing:{kcal:112, sugar:0.4, sodium:320},
+   swap:{brand:"예시 저나트륨 제품", to:"닭가슴살 소시지 200g", price:6800, sugarDelta:0, sodiumDelta:700,
+     note:"팩 전체를 닭가슴살 소시지로 바꾸면 나트륨을 약 700mg 줄이면서 단백질 비율은 비슷하게 유지돼요.", buyable:true}},
+
+  {brand:"동물복지", name:"계란", price:7900, category:"신선식품(단백질)",
+   unitsPurchased:30, unitLabel:"개", servingLabel:"1개(60g)",
+   perServing:{kcal:70, sugar:0, sodium:70}, swap:null},
+
+  {brand:"국내산", name:"바나나", price:3500, category:"신선식품(과일)",
+   unitsPurchased:5, unitLabel:"개", servingLabel:"1개(100g)",
+   perServing:{kcal:89, sugar:12, sodium:1}, swap:null},
+];
+
+function classify(item){
+  if(item.category.startsWith("신선식품")) return {level:'safe', tag:'✔ 안전(신선식품)'};
+  const sugarHigh = Number(document.getElementById('sugarSlider').value);
+  const sodiumHigh = Number(document.getElementById('sodiumSlider').value);
+  const sugarCaution = sugarHigh*0.4, sodiumCaution = sodiumHigh*0.4;
+  const s = item.perServing;
+  if(s.sugar>=sugarHigh) return {level:'high', tag:'⚠ 고당류 (1회 섭취 기준)'};
+  if(s.sodium>=sodiumHigh) return {level:'high', tag:'⚠ 고나트륨 (1회 섭취 기준)'};
+  if(s.sugar>=sugarCaution) return {level:'caution', tag:'△ 당류 주의 (1회 섭취 기준)'};
+  if(s.sodium>=sodiumCaution) return {level:'caution', tag:'△ 나트륨 주의 (1회 섭취 기준)'};
+  return {level:'safe', tag:'✔ 안전 (1회 섭취 기준)'};
+}
+
+function onSliderChange(){
+  document.getElementById('sugarVal').textContent = document.getElementById('sugarSlider').value+'g';
+  document.getElementById('sodiumVal').textContent = document.getElementById('sodiumSlider').value+'mg';
+  let highCount = 0;
+  ITEMS.forEach((it,i)=>{
+    const el = document.getElementById('line'+i);
+    if(!el.classList.contains('done')) return;
+    const {level,tag} = classify(it);
+    el.classList.remove('flag-high','flag-caution','flag-safe');
+    el.classList.add('flag-'+level);
+    el.querySelector('.tag').textContent = tag;
+    if(level==='high') highCount++;
+  });
+  if(document.getElementById('summary').style.display==='grid'){
+    const stamp = document.getElementById('stamp');
+    if(highCount>0){ stamp.classList.remove('safe'); stamp.innerHTML = '대사 위험군<small>METABOLIC RISK</small>'; }
+    else { stamp.classList.add('safe'); stamp.innerHTML = '위험 품목 없음<small>ALL CLEAR</small>'; }
+  }
+}
+
+function onHouseholdChange(){
+  const h = Number(document.getElementById('householdSlider').value);
+  document.getElementById('householdVal').textContent = h+'명';
+  ITEMS.forEach((it,i)=>{
+    const el = document.querySelector('#line'+i+' .perperson');
+    if(!el) return;
+    if(it.isBulk){ el.textContent = `조미료류는 가구원수와 무관하게 1회 사용량 기준으로 판단해요`; return; }
+    const perPerson = (it.unitsPurchased/h).toFixed(1);
+    el.textContent = `👪 ${h}인 가구 기준 1인당 약 ${perPerson}${it.unitLabel.replace(/\(.*\)/,'')}분`;
+  });
+}
+
+const STAGES = [{n:1,lab:"이커머스 마이데이터"},{n:2,lab:"유통사 전자영수증"},{n:3,lab:"동네마트 OCR"}];
+const activeStage = 2;
+const pipelineEl = document.getElementById('pipeline');
+STAGES.forEach(s=>{
+  const div = document.createElement('div');
+  div.className = 'step' + (s.n<activeStage?' done':'') + (s.n===activeStage?' active':'');
+  div.innerHTML = `<div class="dot">${s.n<activeStage?'✓':s.n}</div><div class="lab">${s.lab}</div>`;
+  pipelineEl.appendChild(div);
+});
+
+const linesEl = document.getElementById('lines');
+ITEMS.forEach((it,i)=>{
+  const div = document.createElement('div');
+  div.className = 'rline'; div.id = 'line'+i;
+  div.innerHTML = `<div class="brand">${it.brand}</div><div class="name">${it.name}</div>
+    <div class="price">${it.price.toLocaleString()}원</div>
+    <div class="qty">${it.unitsPurchased}${it.unitLabel} · 1회 섭취 기준 ${it.servingLabel}</div>
+    <div class="perperson"></div>
+    <div class="tag"></div>`;
+  linesEl.appendChild(div);
+});
+document.getElementById('totalPrice').textContent = ITEMS.reduce((s,i)=>s+i.price,0).toLocaleString()+'원';
+onHouseholdChange();
+
+(function buildLedger(){
+  const totals = {};
+  ITEMS.forEach(it=>{ totals[it.category] = (totals[it.category]||0) + it.price; });
+  const grand = Object.values(totals).reduce((a,b)=>a+b,0);
+  const catbar = document.getElementById('catbar');
+  const legend = document.getElementById('catlegend');
+  Object.entries(totals).forEach(([cat,amt])=>{
+    const pct = amt/grand*100;
+    const seg = document.createElement('div');
+    seg.className='seg'; seg.style.width = pct.toFixed(1)+'%'; seg.style.background = CATS[cat].color;
+    seg.textContent = pct>7 ? Math.round(pct)+'%' : '';
+    catbar.appendChild(seg);
+    const item = document.createElement('div');
+    item.className='item';
+    item.innerHTML = `<div class="dot" style="background:${CATS[cat].color}"></div>${cat}
+      <span class="amt">${amt.toLocaleString()}원 · ${pct.toFixed(0)}%</span>`;
+    legend.appendChild(item);
+  });
+  const processedCats = ["음료","과자·디저트","조미료·당류","즉석식품·면류","육가공품"];
+  const processedTotal = processedCats.reduce((s,c)=>s+(totals[c]||0),0);
+  window.__processedPct = Math.round(processedTotal/grand*100);
+  document.getElementById('catInsight').innerHTML =
+    `이번 구매에서는 <b>가공식품·고당류/고나트륨 카테고리</b>가 식비의 <b>${window.__processedPct}%</b>(${processedTotal.toLocaleString()}원)를 차지하고,
+     신선식품은 ${100-window.__processedPct}%에 그쳐요. 매달 이 비율이 쌓이면 소비 패턴 변화를 추적할 수 있어요.`;
+})();
+
+let monthsData = [
+  {lab:"4월", processed:78}, {lab:"5월", processed:74}, {lab:"6월", processed:69}, {lab:"7월(이번)", processed:null},
+];
+function renderTrend(){
+  const chart = document.getElementById('trendChart');
+  chart.innerHTML = '';
+  monthsData.forEach(m=>{
+    const col = document.createElement('div');
+    col.className = 'month-col';
+    col.innerHTML = `
+      <div class="month-bar">
+        <div class="seg processed" style="height:${m.processed}%"></div>
+        <div class="seg fresh" style="height:${100-m.processed}%"></div>
+      </div>
+      <div class="month-pct">${m.processed}%</div>
+      <div class="month-lab">${m.lab}</div>`;
+    chart.appendChild(col);
+  });
+}
+function addMonth(){
+  const labInput = document.getElementById('newMonthLabel');
+  const pctInput = document.getElementById('newMonthPct');
+  const lab = labInput.value.trim();
+  const pct = Number(pctInput.value);
+  if(!lab || isNaN(pct) || pct<0 || pct>100){ alert('달 이름과 0~100 사이의 가공식품 비중(%)을 입력해주세요.'); return; }
+  monthsData.push({lab, processed:pct});
+  if(monthsData.length>6) monthsData.shift();
+  renderTrend();
+  labInput.value=''; pctInput.value='';
+}
+setTimeout(()=>{ monthsData[3].processed = window.__processedPct; renderTrend(); }, 0);
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function runAnalysis(){
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true; btn.textContent = '분석 중...';
+  let highCount = 0;
+
+  for(let i=0;i<ITEMS.length;i++){
+    const el = document.getElementById('line'+i);
+    el.classList.add('active');
+    await sleep(380);
+    el.classList.remove('active');
+    const {level,tag} = classify(ITEMS[i]);
+    el.classList.add('flag-'+level, 'done');
+    el.querySelector('.tag').textContent = tag;
+    if(level==='high') highCount++;
+  }
+
+  await sleep(200);
+  const stamp = document.getElementById('stamp');
+  stamp.classList.add('show');
+  if(highCount===0){ stamp.classList.add('safe'); stamp.innerHTML = '위험 품목 없음<small>ALL CLEAR</small>'; }
+  else { stamp.classList.remove('safe'); stamp.innerHTML = '대사 위험군<small>METABOLIC RISK</small>'; }
+
+  // "품목당 1회씩 다 먹는다면" 하루 권장량 대비 — 총 구매량이 아닌 1회 섭취량 합산
+  const DAILY_SUGAR = 50, DAILY_SODIUM = 2000;
+  const sugarOneEach = ITEMS.reduce((s,i)=>s+i.perServing.sugar,0);
+  const sodiumOneEach = ITEMS.reduce((s,i)=>s+i.perServing.sodium,0);
+  document.getElementById('mSugar').textContent = Math.round(sugarOneEach/DAILY_SUGAR*100)+'%';
+  document.getElementById('mSodium').textContent = Math.round(sodiumOneEach/DAILY_SODIUM*100)+'%';
+
+  const swappable = ITEMS.filter(i=>i.swap);
+  const costDeltaTotal = swappable.reduce((s,i)=>s+(i.swap.price-i.price),0);
+  const cEl = document.getElementById('mCost');
+  cEl.textContent = (costDeltaTotal>=0?'+':'') + costDeltaTotal.toLocaleString()+'원';
+  cEl.parentElement.classList.remove('green','red');
+  cEl.parentElement.classList.add(costDeltaTotal>0?'red':'green');
+  document.getElementById('summary').style.display='grid';
+
+  const swapArea = document.getElementById('swapArea');
+  swapArea.innerHTML = '<div class="swap-header">아래 대체 추천은 "이번에 구매하신 전체 수량" 기준 절감 내역이에요.</div>';
+  swappable.forEach((it,idx)=>{
+    const costDelta = it.swap.price - it.price;
+    const costPill = costDelta===0 ? `<span class="pill cost-down">비용 변화 없음</span>`
+      : costDelta<0 ? `<span class="pill cost-down">비용 ${Math.abs(costDelta).toLocaleString()}원 절감</span>`
+      : `<span class="pill cost-up">비용 ${costDelta.toLocaleString()}원 증가</span>`;
+    const sugarPill = it.swap.sugarDelta>0 ? `<span class="pill nutrient">당류 ${it.swap.sugarDelta}g 감소</span>` : '';
+    const sodiumPill = it.swap.sodiumDelta>0 ? `<span class="pill nutrient">나트륨 ${it.swap.sodiumDelta}mg 감소</span>` : '';
+    const buyBtn = it.swap.buyable ? `<button class="btn small" onclick='openCommerce(${idx})'>🛒 이 상품으로 구매하기</button>` : '';
+    const row = document.createElement('div');
+    row.className = 'swap';
+    row.innerHTML = `
+      <div class="row from"><b>${it.brand} ${it.name}</b></div>
+      <div class="row"><span class="arrow">→</span> <span class="to"><b>${it.swap.to}</b></span></div>
+      <div class="note">${it.swap.note}</div>
+      <div class="deltas">${costPill}${sugarPill}${sodiumPill}</div>
+      ${buyBtn ? `<div class="row" style="margin-top:8px;">${buyBtn}</div>` : ''}`;
+    swapArea.appendChild(row);
+    setTimeout(()=>row.classList.add('show'), idx*150);
+  });
+  window.__swappable = swappable;
+
+  btn.textContent = '✓ 분석 완료';
+}
+
+const FEE_RATE = 0.15;
+function openCommerce(idx){
+  const it = window.__swappable[idx];
+  const fee = Math.round(it.swap.price * FEE_RATE);
+  document.getElementById('modalTitle').textContent = it.swap.to;
+  document.getElementById('modalPrice').textContent = it.swap.price.toLocaleString()+'원';
+  document.getElementById('modalTotal').textContent = it.swap.price.toLocaleString()+'원';
+  document.getElementById('modalFee').innerHTML =
+    `이 거래로 <b>푸드스펜드</b>는 중개수수료 <b>${FEE_RATE*100}%(${fee.toLocaleString()}원)</b>를 받고,
+     나머지 ${(it.swap.price-fee).toLocaleString()}원은 판매 제휴처에 정산돼요.`;
+  document.getElementById('commerceModal').classList.add('show');
+}
+function closeModal(){ document.getElementById('commerceModal').classList.remove('show'); }
+</script>
+</body>
+</html>
