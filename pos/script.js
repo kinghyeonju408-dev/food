@@ -467,11 +467,9 @@ function renderTableDetail() {
       entry.className = "order-entry";
       const head = document.createElement("div");
       head.className = "oe-head";
-      const servedTag = o.servedAt
-        ? `<span class="served-tag done">✅ 완료</span>`
-        : `<span class="served-tag pending">⏳ 대기중</span>`;
+      const stage = orderStage(o);
       head.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span><span class="cat-tag">(${o.category || ""})</span>
-        ${servedTag}
+        <span class="stage-badge ${stage}">${STAGE_LABEL[stage]}</span>
         <span class="entry-amt">${fmtWon(orderAmount(o))}</span>`;
       entry.appendChild(head);
 
@@ -543,6 +541,13 @@ async function settleTable(n) {
 function allOrdersSorted() {
   return ordersCache.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
 }
+// 3단계 상태: pending(주문 확인 보류중) -> confirmed(주문 확인 완료) -> served(음식 나옴)
+function orderStage(o) {
+  if (o.servedAt) return "served";
+  if (o.confirmedAt) return "confirmed";
+  return "pending";
+}
+const STAGE_LABEL = { pending: "확인 보류중", confirmed: "확인 완료", served: "음식 나옴" };
 
 function renderLedger() {
   if (screen !== "ledger") return;
@@ -562,7 +567,7 @@ function renderLedger() {
   const body = document.getElementById("ledgerBody");
   body.innerHTML = "";
   if (rows.length === 0) {
-    body.innerHTML = `<tr><td colspan="7" class="ledger-empty">아직 주문 내역이 없어요</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="ledger-empty">아직 주문 내역이 없어요</td></tr>`;
     return;
   }
   rows.forEach((o) => {
@@ -571,24 +576,41 @@ function renderLedger() {
     if (isRefund) tr.className = "refund-row";
     const itemsStr = (o.items || []).map((it) => `${it.name} ×${it.qty}`).join(", ");
 
+    const stageTd = document.createElement("td");
+    stageTd.className = "stage-cell";
+    if (isRefund) {
+      stageTd.innerHTML = `<span class="served-na">-</span>`;
+    } else {
+      const stage = orderStage(o);
+      stageTd.innerHTML = `<span class="stage-badge ${stage}">${STAGE_LABEL[stage]}</span>`;
+    }
+    tr.appendChild(stageTd);
+
+    const confirmTd = document.createElement("td");
+    confirmTd.className = "stage-cell";
+    if (isRefund) {
+      confirmTd.innerHTML = `<span class="served-na">-</span>`;
+    } else {
+      const cbtn = document.createElement("button");
+      cbtn.className = "stage-btn confirm" + (o.confirmedAt ? " on" : "");
+      cbtn.textContent = o.confirmedAt ? `✔ 주문확인 · ${fmtTime(o.confirmedAt)}` : "주문 확인";
+      cbtn.addEventListener("click", () => toggleConfirmed(o.id, !o.confirmedAt));
+      confirmTd.appendChild(cbtn);
+    }
+    tr.appendChild(confirmTd);
+
     const servedTd = document.createElement("td");
-    servedTd.className = "served-cell";
+    servedTd.className = "stage-cell";
     if (isRefund) {
       servedTd.innerHTML = `<span class="served-na">-</span>`;
     } else {
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.className = "served-checkbox";
-      cb.checked = !!o.servedAt;
-      cb.addEventListener("change", () => toggleServed(o.id, cb.checked));
-      servedTd.appendChild(cb);
+      const sbtn = document.createElement("button");
+      sbtn.className = "stage-btn served" + (o.servedAt ? " on" : "");
+      sbtn.textContent = o.servedAt ? `🍽 음식나옴 · ${fmtTime(o.servedAt)}` : "음식 준비 완료";
+      sbtn.addEventListener("click", () => toggleServed(o.id, !o.servedAt));
+      servedTd.appendChild(sbtn);
     }
     tr.appendChild(servedTd);
-
-    const servedTimeTd = document.createElement("td");
-    servedTimeTd.className = "mono served-time";
-    servedTimeTd.textContent = o.servedAt ? fmtDateTime(o.servedAt) : "-";
-    tr.appendChild(servedTimeTd);
 
     tr.insertAdjacentHTML("beforeend", `
       <td class="mono">${fmtDateTime(o.createdAt)}</td>
@@ -598,6 +620,24 @@ function renderLedger() {
       <td class="mono amt">${fmtWon(orderAmount(o))}</td>`);
     body.appendChild(tr);
   });
+}
+
+async function toggleConfirmed(orderId, checked) {
+  const confirmedAt = checked ? new Date().toISOString() : null;
+  try {
+    if (appDb) {
+      await appDb.collection("orders").doc(orderId).update({ confirmedAt });
+    } else {
+      const o = ordersCache.find((x) => x.id === orderId);
+      if (o) o.confirmedAt = confirmedAt;
+      saveLocalData();
+      refreshDataScreens();
+    }
+  } catch (e) {
+    console.error("주문 확인 처리 실패", e);
+    showToast("처리에 실패했어요. 다시 시도해주세요.");
+    renderLedger();
+  }
 }
 
 async function toggleServed(orderId, checked) {
@@ -623,11 +663,12 @@ async function exportExcel() {
   const rows = allOrdersSorted();
   const totalAmount = rows.reduce((s, o) => s + orderAmount(o), 0);
 
-  const aoa = [["완료", "나간시간", "시간", "테이블", "구분", "주문 내역", "금액"]];
+  const aoa = [["상태", "확인시간", "나간시간", "시간", "테이블", "구분", "주문 내역", "금액"]];
   rows.forEach((o) => {
     const isRefund = o.type === "refund";
     aoa.push([
-      isRefund ? "-" : (o.servedAt ? "완료" : ""),
+      isRefund ? "-" : STAGE_LABEL[orderStage(o)],
+      o.confirmedAt ? fmtDateTime(o.confirmedAt) : "",
       o.servedAt ? fmtDateTime(o.servedAt) : "",
       fmtDateTime(o.createdAt),
       `테이블 ${o.tableNum}`,
@@ -637,10 +678,10 @@ async function exportExcel() {
     ]);
   });
   aoa.push([]);
-  aoa.push(["", "", "", "", "", "총 매출", totalAmount]);
+  aoa.push(["", "", "", "", "", "", "총 매출", totalAmount]);
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 42 }, { wch: 12 }];
+  ws["!cols"] = [{ wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 42 }, { wch: 12 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "주문내역");
   const wbArray = XLSX.write(wb, { bookType: "xlsx", type: "array" });
