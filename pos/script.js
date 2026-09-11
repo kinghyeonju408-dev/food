@@ -467,7 +467,11 @@ function renderTableDetail() {
       entry.className = "order-entry";
       const head = document.createElement("div");
       head.className = "oe-head";
+      const servedTag = o.servedAt
+        ? `<span class="served-tag done">✅ 완료</span>`
+        : `<span class="served-tag pending">⏳ 대기중</span>`;
       head.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span><span class="cat-tag">(${o.category || ""})</span>
+        ${servedTag}
         <span class="entry-amt">${fmtWon(orderAmount(o))}</span>`;
       entry.appendChild(head);
 
