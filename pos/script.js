@@ -54,9 +54,12 @@ let tickTimer = null;
 let appDb = null;           // claude db 네임스페이스 (없으면 로컬 모드)
 let ordersCache = [];       // 주문(type:"order") + 환불(type:"refund") 문서 목록
 let tablesCache = {};       // { "5": {currentBatch, settlements:[{batch, settledAt}]} }
+let waitingCache = [];      // [{id, name, partySize, phone, createdAt}]
 
 const LS_ORDERS = "ilhof_pos_orders";
 const LS_TABLES = "ilhof_pos_tables";
+const LS_WAITING = "ilhof_pos_waiting";
+const OVERTIME_MINUTES = 120; // 첫 주문 후 이 시간이 지나면 테이블이 빨간색으로 표시됨
 
 // ---------------- 유틸 ----------------
 function fmtTime(iso) {
@@ -70,10 +73,13 @@ function fmtDateTime(iso) {
   return d.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 function fmtWon(n) { return "₩" + Math.round(n || 0).toLocaleString("ko-KR"); }
-function fmtElapsed(iso) {
+function elapsedMinutes(iso) {
   const start = new Date(iso).getTime();
-  if (isNaN(start)) return "-";
-  const mins = Math.max(0, Math.round((Date.now() - start) / 60000));
+  if (isNaN(start)) return 0;
+  return Math.max(0, (Date.now() - start) / 60000);
+}
+function fmtElapsed(iso) {
+  const mins = Math.round(elapsedMinutes(iso));
   if (mins < 60) return `${mins}분`;
   return `${Math.floor(mins / 60)}시간 ${mins % 60}분`;
 }
@@ -110,19 +116,24 @@ function loadLocalData() {
   catch (e) { ordersCache = []; }
   try { tablesCache = JSON.parse(localStorage.getItem(LS_TABLES) || "{}"); }
   catch (e) { tablesCache = {}; }
+  try { waitingCache = JSON.parse(localStorage.getItem(LS_WAITING) || "[]"); }
+  catch (e) { waitingCache = []; }
   refreshDataScreens();
 }
 function refreshDataScreens() {
   renderRecords();
   renderLedger();
+  renderWaitingList();
+  updateWaitingBadge();
   if (openDetailTable) renderTableDetail();
 }
 function saveLocalData() {
   localStorage.setItem(LS_ORDERS, JSON.stringify(ordersCache));
   localStorage.setItem(LS_TABLES, JSON.stringify(tablesCache));
+  localStorage.setItem(LS_WAITING, JSON.stringify(waitingCache));
 }
 window.addEventListener("storage", (e) => {
-  if (!appDb && (e.key === LS_ORDERS || e.key === LS_TABLES)) loadLocalData();
+  if (!appDb && (e.key === LS_ORDERS || e.key === LS_TABLES || e.key === LS_WAITING)) loadLocalData();
 });
 
 // ---------------- 화면 전환 ----------------
@@ -130,12 +141,14 @@ function setScreen(name) {
   screen = name;
   document.querySelectorAll(".screen").forEach((el) => { el.hidden = el.id !== "screen-" + name; });
   document.getElementById("backBtn").hidden = name === "home";
-  document.getElementById("navRecordsBtn").hidden = name === "records" || name === "category" || name === "menu";
-  document.getElementById("navLedgerBtn").hidden = name === "ledger" || name === "category" || name === "menu";
+  document.getElementById("waitingBtn").hidden = name !== "home";
+  document.getElementById("navRecordsBtn").hidden = name === "records" || name === "category" || name === "menu" || name === "waiting";
+  document.getElementById("navLedgerBtn").hidden = name === "ledger" || name === "category" || name === "menu" || name === "waiting";
   document.getElementById("cartBar").hidden = !((name === "menu" || name === "category") && Object.keys(cart).length > 0);
 
   clearInterval(tickTimer);
   if (name === "records") { tickTimer = setInterval(renderRecords, 30000); }
+  else if (name === "waiting") { tickTimer = setInterval(renderWaitingList, 30000); }
 }
 
 function showHome() { currentCat = null; currentTable = null; cart = {}; setScreen("home"); renderHomeTables(); }
@@ -143,12 +156,14 @@ function selectTable(n) { currentTable = n; currentCat = null; setScreen("catego
 function showMenu(cat) { currentCat = cat; setScreen("menu"); renderMenu(); }
 function showRecords() { setScreen("records"); renderRecords(); }
 function showLedger() { setScreen("ledger"); renderLedger(); }
+function showWaiting() { setScreen("waiting"); renderWaitingList(); }
 
 function onBack() {
   if (screen === "category") showHome();
   else if (screen === "menu") { currentCat = null; setScreen("category"); renderCategoryScreen(); }
   else if (screen === "records") showHome();
   else if (screen === "ledger") showHome();
+  else if (screen === "waiting") showHome();
 }
 
 // ---------------- 홈: 테이블 선택 화면 ----------------
@@ -386,6 +401,7 @@ function renderRecords() {
       const lastOrder = openTakenOrders[openTakenOrders.length - 1];
       const lastItems = (lastOrder.items || []).map((it) => it.name);
       const recentStr = lastItems.length > 1 ? `${lastItems[0]} 외 ${lastItems.length - 1}건` : (lastItems[0] || "-");
+      if (elapsedMinutes(openTakenOrders[0].createdAt) >= OVERTIME_MINUTES) tile.classList.add("overtime");
       tile.innerHTML = `
         <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor}</span></div>
         <div class="rt-recent">${recentStr}</div>
@@ -658,9 +674,12 @@ async function resetAll() {
       await Promise.all(osnap.docs.map((d) => appDb.collection("orders").doc(d.id).delete()));
       const tsnap = await appDb.collection("tables").limit(1000).get();
       await Promise.all(tsnap.docs.map((d) => appDb.collection("tables").doc(d.id).delete()));
+      const wsnap = await appDb.collection("waiting").limit(1000).get();
+      await Promise.all(wsnap.docs.map((d) => appDb.collection("waiting").doc(d.id).delete()));
     } else {
       ordersCache = [];
       tablesCache = {};
+      waitingCache = [];
       saveLocalData();
       refreshDataScreens();
     }
@@ -671,12 +690,96 @@ async function resetAll() {
   }
 }
 
+// ---------------- 웨이팅 ----------------
+function updateWaitingBadge() {
+  const badge = document.getElementById("waitingBadge");
+  if (waitingCache.length > 0) { badge.hidden = false; badge.textContent = waitingCache.length; }
+  else { badge.hidden = true; }
+}
+
+function renderWaitingList() {
+  if (screen !== "waiting") return;
+  const rows = waitingCache.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  document.getElementById("waitingCountBadge").textContent = rows.length + "팀";
+
+  const list = document.getElementById("waitingList");
+  list.innerHTML = "";
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="waiting-empty">현재 대기 중인 팀이 없어요</div>`;
+    return;
+  }
+  rows.forEach((w, i) => {
+    const item = document.createElement("div");
+    item.className = "waiting-item";
+    item.innerHTML = `
+      <span class="wi-num">${i + 1}</span>
+      <div class="wi-main">
+        <span class="wi-name">${w.name}</span>
+        <span class="wi-sub">${w.partySize}명 · ${w.phone || "연락처 미입력"}</span>
+      </div>
+      <span class="wi-elapsed">⏱ ${fmtElapsed(w.createdAt)} 대기중</span>`;
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "wi-remove";
+    rmBtn.textContent = "입장/삭제";
+    rmBtn.addEventListener("click", () => removeWaiting(w.id));
+    item.appendChild(rmBtn);
+    list.appendChild(item);
+  });
+}
+
+async function addWaiting() {
+  const nameEl = document.getElementById("waitName");
+  const sizeEl = document.getElementById("waitSize");
+  const phoneEl = document.getElementById("waitPhone");
+  const name = nameEl.value.trim();
+  const partySize = Math.max(1, Number(sizeEl.value) || 1);
+  const phone = phoneEl.value.trim();
+  if (!name) { showToast("대표자 이름을 입력해주세요."); nameEl.focus(); return; }
+
+  const entry = { name, partySize, phone, createdAt: new Date().toISOString() };
+  try {
+    if (appDb) {
+      await appDb.collection("waiting").add(entry);
+    } else {
+      entry.id = "local-wait-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+      waitingCache.push(entry);
+      saveLocalData();
+      refreshDataScreens();
+    }
+    nameEl.value = "";
+    sizeEl.value = "2";
+    phoneEl.value = "";
+    nameEl.focus();
+    showToast(`${name}님 웨이팅 등록했어요.`);
+  } catch (e) {
+    console.error("웨이팅 등록 실패", e);
+    showToast("웨이팅 등록에 실패했어요. 다시 시도해주세요.");
+  }
+}
+
+async function removeWaiting(id) {
+  try {
+    if (appDb) {
+      await appDb.collection("waiting").doc(id).delete();
+    } else {
+      waitingCache = waitingCache.filter((w) => w.id !== id);
+      saveLocalData();
+      refreshDataScreens();
+    }
+  } catch (e) {
+    console.error("웨이팅 삭제 실패", e);
+    showToast("처리에 실패했어요. 다시 시도해주세요.");
+  }
+}
+
 // ---------------- 초기 바인딩 & 부팅 ----------------
 function wireStaticUI() {
   document.querySelectorAll(".category-card").forEach((el) => {
     el.addEventListener("click", () => showMenu(el.dataset.cat));
   });
   document.getElementById("backBtn").addEventListener("click", onBack);
+  document.getElementById("waitingBtn").addEventListener("click", showWaiting);
+  document.getElementById("waitAddBtn").addEventListener("click", addWaiting);
   document.getElementById("navRecordsBtn").addEventListener("click", showRecords);
   document.getElementById("navLedgerBtn").addEventListener("click", showLedger);
   document.getElementById("exportExcelBtn").addEventListener("click", exportExcel);
@@ -719,6 +822,13 @@ async function boot() {
             refreshDataScreens();
           },
           (err) => console.error("tables 구독 오류", err)
+        );
+        appDb.collection("waiting").orderBy("createdAt", "asc").limit(200).onSnapshot(
+          (snap) => {
+            waitingCache = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+            refreshDataScreens();
+          },
+          (err) => console.error("waiting 구독 오류", err)
         );
       }
     }

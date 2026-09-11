@@ -13,6 +13,7 @@
 
   <header class="topbar">
     <button id="backBtn" class="icon-btn" hidden aria-label="뒤로">←</button>
+    <button id="waitingBtn" class="nav-btn secondary waiting-btn">🕒 웨이팅<span id="waitingBadge" class="waiting-badge" hidden>0</span></button>
     <div class="brand">🍺 일일호프 POS</div>
     <span id="syncDot" class="sync-dot" title="연결 확인 중..."></span>
     <div class="nav-group">
@@ -33,6 +34,22 @@
       <div id="tableGrid1F" class="table-grid"></div>
       <div class="section-label">지하 1층 <span class="badge">11~22</span></div>
       <div id="tableGridB1" class="table-grid"></div>
+    </section>
+
+    <!-- 웨이팅 -->
+    <section id="screen-waiting" class="screen" hidden>
+      <div class="context-bar">
+        <span class="context-pill on">🕒 웨이팅 등록</span>
+        <span class="context-pill">대표자 정보를 입력하고 등록해주세요</span>
+      </div>
+      <div class="waiting-form">
+        <input id="waitName" type="text" placeholder="대표자 이름" />
+        <input id="waitSize" type="number" min="1" value="2" placeholder="인원수" />
+        <input id="waitPhone" type="tel" placeholder="연락처 (010-0000-0000)" />
+        <button id="waitAddBtn" class="btn-primary">웨이팅 등록</button>
+      </div>
+      <div class="section-label">대기 명단 <span class="badge" id="waitingCountBadge">0팀</span></div>
+      <div id="waitingList" class="waiting-list"></div>
     </section>
 
     <!-- 카테고리 선택 -->
