@@ -23,12 +23,21 @@
 
   <main class="screens">
 
-    <!-- 홈: 카테고리 선택 -->
+    <!-- 홈: 테이블 선택 -->
     <section id="screen-home" class="screen">
       <div class="home-hero">
         <div class="home-eyebrow">일일호프 · 주문 접수</div>
-        <div class="home-title">무엇을 주문할까요?<br>카테고리를 먼저 골라주세요</div>
+        <div class="home-title">테이블을 먼저 선택해주세요</div>
       </div>
+      <div class="section-label">1층 <span class="badge">1~10</span></div>
+      <div id="tableGrid1F" class="table-grid"></div>
+      <div class="section-label">지하 1층 <span class="badge">11~22</span></div>
+      <div id="tableGridB1" class="table-grid"></div>
+    </section>
+
+    <!-- 카테고리 선택 -->
+    <section id="screen-category" class="screen" hidden>
+      <div id="categoryContext" class="context-bar"></div>
       <div class="category-grid">
         <button class="category-card anju" data-cat="anju">
           <span class="cat-emoji">🍢</span>
@@ -41,15 +50,6 @@
           <span class="cat-hint">소주 · 맥주 · 하이볼 외 6종</span>
         </button>
       </div>
-    </section>
-
-    <!-- 테이블 선택 -->
-    <section id="screen-tables" class="screen" hidden>
-      <div id="tablesContext" class="context-bar"></div>
-      <div class="section-label">1층 <span class="badge">1~10</span></div>
-      <div id="tableGrid1F" class="table-grid"></div>
-      <div class="section-label">지하 1층 <span class="badge">11~22</span></div>
-      <div id="tableGridB1" class="table-grid"></div>
     </section>
 
     <!-- 메뉴 & 장바구니 -->

@@ -27,9 +27,10 @@ const MENU = {
     ] },
 };
 
-// 메뉴명 -> 가격 조회용
+// 메뉴명 -> 가격 / 카테고리 조회용
 const PRICE = {};
-Object.values(MENU).forEach((cat) => cat.items.forEach((it) => { PRICE[it.name] = it.price; }));
+const ITEM_CAT = {};
+Object.values(MENU).forEach((cat) => cat.items.forEach((it) => { PRICE[it.name] = it.price; ITEM_CAT[it.name] = cat.label; }));
 
 const TABLE_COUNT = 22;
 const FIRST_FLOOR_MAX = 10; // 1~10: 1층, 11~22: 지하1층
@@ -129,42 +130,45 @@ function setScreen(name) {
   screen = name;
   document.querySelectorAll(".screen").forEach((el) => { el.hidden = el.id !== "screen-" + name; });
   document.getElementById("backBtn").hidden = name === "home";
-  document.getElementById("navRecordsBtn").hidden = name === "records" || name === "tables" || name === "menu";
-  document.getElementById("navLedgerBtn").hidden = name === "ledger" || name === "tables" || name === "menu";
-  document.getElementById("cartBar").hidden = !(name === "menu" && Object.keys(cart).length > 0);
+  document.getElementById("navRecordsBtn").hidden = name === "records" || name === "category" || name === "menu";
+  document.getElementById("navLedgerBtn").hidden = name === "ledger" || name === "category" || name === "menu";
+  document.getElementById("cartBar").hidden = !((name === "menu" || name === "category") && Object.keys(cart).length > 0);
 
   clearInterval(tickTimer);
   if (name === "records") { tickTimer = setInterval(renderRecords, 30000); }
 }
 
-function showHome() { currentCat = null; currentTable = null; cart = {}; setScreen("home"); }
-function showTableSelect(cat) { currentCat = cat; setScreen("tables"); renderTableSelect(); }
-function showMenu(table) { currentTable = table; cart = {}; setScreen("menu"); renderMenu(); }
+function showHome() { currentCat = null; currentTable = null; cart = {}; setScreen("home"); renderHomeTables(); }
+function selectTable(n) { currentTable = n; currentCat = null; setScreen("category"); renderCategoryScreen(); }
+function showMenu(cat) { currentCat = cat; setScreen("menu"); renderMenu(); }
 function showRecords() { setScreen("records"); renderRecords(); }
 function showLedger() { setScreen("ledger"); renderLedger(); }
 
 function onBack() {
-  if (screen === "tables") showHome();
-  else if (screen === "menu") { cart = {}; setScreen("tables"); renderTableSelect(); }
+  if (screen === "category") showHome();
+  else if (screen === "menu") { currentCat = null; setScreen("category"); renderCategoryScreen(); }
   else if (screen === "records") showHome();
   else if (screen === "ledger") showHome();
 }
 
-// ---------------- 테이블 선택 화면 ----------------
-function renderTableSelect() {
-  const cat = MENU[currentCat];
-  document.getElementById("tablesContext").innerHTML =
-    `<span class="context-pill on">${cat.emoji} ${cat.label} 주문</span><span class="context-pill">테이블을 선택하세요</span>`;
-
+// ---------------- 홈: 테이블 선택 화면 ----------------
+function renderHomeTables() {
   const g1 = document.getElementById("tableGrid1F"); g1.innerHTML = "";
   const g2 = document.getElementById("tableGridB1"); g2.innerHTML = "";
   for (let n = 1; n <= TABLE_COUNT; n++) {
     const btn = document.createElement("button");
     btn.className = "table-btn";
     btn.innerHTML = `${n}<span class="lab">테이블</span>`;
-    btn.addEventListener("click", () => showMenu(n));
+    btn.addEventListener("click", () => selectTable(n));
     (n <= FIRST_FLOOR_MAX ? g1 : g2).appendChild(btn);
   }
+}
+
+// ---------------- 카테고리 선택 화면 ----------------
+function renderCategoryScreen() {
+  document.getElementById("categoryContext").innerHTML =
+    `<span class="context-pill on">🍽 테이블 ${currentTable}</span><span class="context-pill">안주·주류를 모두 담아 한 번에 주문할 수 있어요</span>`;
+  renderCartBar();
 }
 
 // ---------------- 메뉴 & 장바구니 화면 ----------------
@@ -252,7 +256,7 @@ function addModalToCart() {
 function renderCartBar() {
   const bar = document.getElementById("cartBar");
   const entries = Object.entries(cart);
-  if (screen !== "menu" || entries.length === 0) { bar.hidden = true; return; }
+  if (!(screen === "menu" || screen === "category") || entries.length === 0) { bar.hidden = true; return; }
   bar.hidden = false;
 
   const chips = document.getElementById("cartChips");
@@ -266,17 +270,18 @@ function renderCartBar() {
     chip.innerHTML = `<span>${name} <span class="n">×${qty}</span></span>`;
     const rm = document.createElement("button");
     rm.textContent = "✕";
-    rm.addEventListener("click", () => { delete cart[name]; renderMenu(); });
+    rm.addEventListener("click", () => { delete cart[name]; refreshCartUI(); });
     chip.appendChild(rm);
     chips.appendChild(chip);
   });
   document.getElementById("cartConfirmBtn").textContent = `주문 확정하기 (${totalQty}개 · ${fmtWon(totalAmount)})`;
 }
-function clearCart() { cart = {}; renderMenu(); }
+function refreshCartUI() { if (screen === "menu") renderMenu(); else renderCartBar(); }
+function clearCart() { cart = {}; refreshCartUI(); }
 
 async function submitOrder() {
-  const items = Object.entries(cart).map(([name, qty]) => ({ name, qty, price: PRICE[name] || 0 }));
-  if (items.length === 0 || !currentTable || !currentCat) return;
+  const items = Object.entries(cart).map(([name, qty]) => ({ name, qty, price: PRICE[name] || 0, cat: ITEM_CAT[name] }));
+  if (items.length === 0 || !currentTable) return;
 
   const confirmBtn = document.getElementById("cartConfirmBtn");
   confirmBtn.disabled = true;
@@ -285,7 +290,7 @@ async function submitOrder() {
   const order = {
     type: "order",
     tableNum: currentTable,
-    category: MENU[currentCat].label,
+    category: [...new Set(items.map((it) => it.cat))].join(" · "),
     items,
     amount: items.reduce((s, it) => s + it.price * it.qty, 0),
     createdAt: new Date().toISOString(),
@@ -329,8 +334,8 @@ async function submitRefund() {
   const refundDoc = {
     type: "refund",
     tableNum: order.tableNum,
-    category: order.category,
-    items: [{ name: refundCtx.itemName, qty, price: refundCtx.unitPrice }],
+    category: ITEM_CAT[refundCtx.itemName] || order.category,
+    items: [{ name: refundCtx.itemName, qty, price: refundCtx.unitPrice, cat: ITEM_CAT[refundCtx.itemName] }],
     amount: -(refundCtx.unitPrice * qty),
     createdAt: new Date().toISOString(),
     batch: order.batch,
@@ -523,8 +528,11 @@ function renderLedger() {
   if (screen !== "ledger") return;
   const rows = allOrdersSorted();
   const totalAmount = rows.reduce((s, o) => s + orderAmount(o), 0);
-  const anjuTotal = rows.filter((o) => o.category === MENU.anju.label).reduce((s, o) => s + orderAmount(o), 0);
-  const drinkTotal = rows.filter((o) => o.category === MENU.drink.label).reduce((s, o) => s + orderAmount(o), 0);
+  const categoryTotal = (label) => rows.reduce((s, o) => s + (o.items || [])
+    .filter((it) => (it.cat || ITEM_CAT[it.name]) === label)
+    .reduce((s2, it) => s2 + (o.type === "refund" ? -1 : 1) * Number(it.price || 0) * Number(it.qty || 0), 0), 0);
+  const anjuTotal = categoryTotal(MENU.anju.label);
+  const drinkTotal = categoryTotal(MENU.drink.label);
 
   document.getElementById("ledgerCount").textContent = rows.length + "건";
   document.getElementById("ledgerTotal").textContent = fmtWon(totalAmount);
@@ -626,7 +634,7 @@ async function resetAll() {
 // ---------------- 초기 바인딩 & 부팅 ----------------
 function wireStaticUI() {
   document.querySelectorAll(".category-card").forEach((el) => {
-    el.addEventListener("click", () => showTableSelect(el.dataset.cat));
+    el.addEventListener("click", () => showMenu(el.dataset.cat));
   });
   document.getElementById("backBtn").addEventListener("click", onBack);
   document.getElementById("navRecordsBtn").addEventListener("click", showRecords);
@@ -689,4 +697,5 @@ async function boot() {
 
 wireStaticUI();
 setScreen("home");
+renderHomeTables();
 boot();
