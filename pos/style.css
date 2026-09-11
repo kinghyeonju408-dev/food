@@ -131,7 +131,8 @@ main.screens{flex:1;}
 }
 .menu-item:active{border-color:var(--amber);background:var(--surface-2);}
 .menu-item .mi-price{font-size:12px;font-weight:600;color:var(--amber);}
-.menu-item .mi-price-free{color:var(--teal);text-decoration:line-through;text-decoration-color:var(--text-dim);}
+.menu-item .mi-price-orig{color:var(--text-dim);text-decoration:line-through;}
+.menu-item .mi-price-free-tag{color:var(--teal);font-weight:800;}
 .menu-item .mi-stock{font-size:10.5px;font-weight:600;color:var(--text-dim);}
 .menu-item .mi-stock.low{color:var(--rose);}
 .menu-item .mi-soldout{font-size:10.5px;font-weight:800;color:var(--rose);background:var(--rose-soft);
@@ -158,6 +159,7 @@ main.screens{flex:1;}
 .cart-chip{display:flex;align-items:center;gap:8px;background:var(--surface-3);border:1px solid var(--border);
   border-radius:999px;padding:6px 8px 6px 14px;font-size:13px;font-weight:600;}
 .cart-chip .n{font-family:"IBM Plex Mono",monospace;color:var(--amber);}
+.chip-service{margin-right:4px;}
 .cart-chip button{width:22px;height:22px;border-radius:50%;border:none;background:var(--rose-soft);color:var(--rose);
   font-size:13px;cursor:pointer;line-height:1;}
 .cart-actions{display:flex;gap:10px;align-items:center;}
@@ -232,6 +234,10 @@ main.screens{flex:1;}
 .stage-badge.pending{background:var(--rose-soft);color:var(--rose);}
 .stage-badge.confirmed{background:var(--amber-soft);color:var(--amber-deep);}
 .stage-badge.served{background:var(--mint-soft);color:var(--mint);}
+.service-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;display:inline-block;}
+.service-badge.paid{background:var(--amber-soft);color:var(--amber-deep);}
+.service-badge.coupon{background:var(--violet-soft);color:var(--violet);}
+.service-badge.friend{background:var(--teal-soft);color:var(--teal);}
 .oe-items{display:flex;flex-wrap:wrap;gap:6px;}
 .item-chip{display:flex;align-items:center;gap:6px;background:var(--surface-3);border-radius:999px;
   padding:5px 6px 5px 12px;font-size:11.8px;font-weight:600;}

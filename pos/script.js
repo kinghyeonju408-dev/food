@@ -53,6 +53,7 @@ let screen = "home";
 let currentCat = null;
 let currentTable = null;
 let cart = {};              // { 메뉴명: 수량 }
+let cartService = {};       // { 메뉴명: null|"coupon"|"friend" } — 담을 당시 어떤 카테고리였는지(유료/서비스 구분)
 
 let modalMode = "add";      // "add" | "refund"
 let modalItem = null;       // add 모드에서 선택한 메뉴명
@@ -190,11 +191,11 @@ function setScreen(name) {
   else if (name === "waiting") { tickTimer = setInterval(renderWaitingList, 30000); }
 }
 
-function showHome() { currentCat = null; currentTable = null; cart = {}; setScreen("home"); renderHomeTables(); }
+function showHome() { currentCat = null; currentTable = null; cart = {}; cartService = {}; setScreen("home"); renderHomeTables(); }
 function selectTable(n) { currentTable = n; currentCat = null; setScreen("category"); renderCategoryScreen(); }
 function showMenu(cat) { currentCat = cat; setScreen("menu"); renderMenu(); }
 function showRecords() { setScreen("records"); renderRecords(); }
-function showLedger() { setScreen("ledger"); renderLedger(); }
+function showLedger() { setScreen("ledger"); renderLedger(); renderStockPanel(); }
 function showWaiting() { setScreen("waiting"); renderWaitingList(); }
 
 function onBack() {
@@ -248,7 +249,7 @@ function renderMenu() {
       const lowStock = remaining !== Infinity && remaining <= 10;
       btn.innerHTML = `
         <span class="mi-name">${name}</span>
-        <span class="mi-price mono mi-price-free">${fmtWon(price)} → 무료</span>
+        <span class="mi-price mono"><span class="mi-price-orig">${fmtWon(price)}</span> → <span class="mi-price-free-tag">무료</span></span>
         <span class="mi-stock mono${lowStock ? " low" : ""}">재고 ${fmtStock(remaining)}</span>
         ${hard ? `<span class="mi-soldout">품절</span>` : ""}`;
     } else {
@@ -329,6 +330,7 @@ function confirmModalAction() {
 function addModalToCart() {
   if (!modalItem) return;
   cart[modalItem] = (cart[modalItem] || 0) + modalQty;
+  cartService[modalItem] = isServiceCat(currentCat) ? currentCat : null;
   closeQtyModal();
   renderMenu();
 }
@@ -339,63 +341,91 @@ function renderCartBar() {
   if (!(screen === "menu" || screen === "category") || entries.length === 0) { bar.hidden = true; return; }
   bar.hidden = false;
 
-  const isService = isServiceCat(currentCat);
   const chips = document.getElementById("cartChips");
   chips.innerHTML = "";
   let totalQty = 0, totalAmount = 0;
   entries.forEach(([name, qty]) => {
     totalQty += qty;
-    totalAmount += (PRICE[name] || 0) * qty;
+    const svc = cartService[name];
+    const price = svc ? 0 : (PRICE[name] || 0);
+    totalAmount += price * qty;
     const chip = document.createElement("div");
     chip.className = "cart-chip";
-    chip.innerHTML = `<span>${name} <span class="n">×${qty}</span></span>`;
+    const svcTag = svc ? `<span class="chip-service ${svc}">${SERVICE_CATS[svc].emoji}</span>` : "";
+    chip.innerHTML = `<span>${svcTag}${name} <span class="n">×${qty}</span></span>`;
     const rm = document.createElement("button");
     rm.textContent = "✕";
-    rm.addEventListener("click", () => { delete cart[name]; refreshCartUI(); });
+    rm.addEventListener("click", () => { delete cart[name]; delete cartService[name]; refreshCartUI(); });
     chip.appendChild(rm);
     chips.appendChild(chip);
   });
-  document.getElementById("cartConfirmBtn").textContent = isService
-    ? `무료 서비스로 확정하기 (${totalQty}개 · 원가 ${fmtWon(totalAmount)})`
-    : `주문 확정하기 (${totalQty}개 · ${fmtWon(totalAmount)})`;
+  document.getElementById("cartConfirmBtn").textContent = `주문 확정하기 (${totalQty}개 · ${fmtWon(totalAmount)})`;
 }
 function refreshCartUI() { if (screen === "menu") renderMenu(); else renderCartBar(); }
-function clearCart() { cart = {}; refreshCartUI(); }
+function clearCart() { cart = {}; cartService = {}; refreshCartUI(); }
 
 async function submitOrder() {
-  const isService = isServiceCat(currentCat);
-  const items = Object.entries(cart).map(([name, qty]) => ({
-    name, qty, price: isService ? 0 : (PRICE[name] || 0), cat: ITEM_CAT[name],
-  }));
-  if (items.length === 0 || !currentTable) return;
+  const names = Object.keys(cart);
+  if (names.length === 0 || !currentTable) return;
 
   const confirmBtn = document.getElementById("cartConfirmBtn");
   confirmBtn.disabled = true;
 
   const batch = (tablesCache[String(currentTable)] && tablesCache[String(currentTable)].currentBatch) || 1;
-  const order = {
-    type: "order",
-    tableNum: currentTable,
-    category: isService ? SERVICE_CATS[currentCat].label : [...new Set(items.map((it) => it.cat))].join(" · "),
-    service: isService ? currentCat : null,
-    items,
-    amount: items.reduce((s, it) => s + it.price * it.qty, 0),
-    compValue: isService ? Object.entries(cart).reduce((s, [name, qty]) => s + (PRICE[name] || 0) * qty, 0) : 0,
-    createdAt: new Date().toISOString(),
-    batch,
-  };
+  const now = new Date().toISOString();
+
+  // 담을 당시 태그(cartService)에 따라 유료/쿠폰 서비스/친구 서비스로 나눠서 각각 별도 주문으로 전송
+  const groups = { paid: [], coupon: [], friend: [] };
+  names.forEach((name) => {
+    const svc = cartService[name] || "paid";
+    groups[svc].push({ name, qty: cart[name] });
+  });
+
+  const orders = [];
+  if (groups.paid.length > 0) {
+    const items = groups.paid.map(({ name, qty }) => ({ name, qty, price: PRICE[name] || 0, cat: ITEM_CAT[name] }));
+    orders.push({
+      type: "order",
+      tableNum: currentTable,
+      category: [...new Set(items.map((it) => it.cat))].join(" · "),
+      service: null,
+      items,
+      amount: items.reduce((s, it) => s + it.price * it.qty, 0),
+      compValue: 0,
+      createdAt: now,
+      batch,
+    });
+  }
+  ["coupon", "friend"].forEach((svc) => {
+    if (groups[svc].length === 0) return;
+    const items = groups[svc].map(({ name, qty }) => ({ name, qty, price: 0, cat: ITEM_CAT[name] }));
+    orders.push({
+      type: "order",
+      tableNum: currentTable,
+      category: SERVICE_CATS[svc].label,
+      service: svc,
+      items,
+      amount: 0,
+      compValue: groups[svc].reduce((s, { name, qty }) => s + (PRICE[name] || 0) * qty, 0),
+      createdAt: now,
+      batch,
+    });
+  });
 
   try {
     if (appDb) {
-      await appDb.collection("orders").add(order);
+      await Promise.all(orders.map((order) => appDb.collection("orders").add(order)));
     } else {
-      order.id = "local-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
-      ordersCache.push(order);
+      orders.forEach((order) => {
+        order.id = "local-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+        ordersCache.push(order);
+      });
       saveLocalData();
       refreshDataScreens();
     }
     const tableJustOrdered = currentTable;
     cart = {};
+    cartService = {};
     showToast(`테이블 ${tableJustOrdered}번 주문이 주방으로 전달됐어요 🍳`);
     showHome();
   } catch (e) {
@@ -541,7 +571,10 @@ function renderTableDetail() {
       const head = document.createElement("div");
       head.className = "oe-head";
       const stage = orderStage(o);
-      head.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span><span class="cat-tag">(${o.category || ""})</span>
+      const svcBadge = o.service
+        ? `<span class="service-badge ${o.service}">${SERVICE_CATS[o.service].emoji} ${SERVICE_CATS[o.service].label}</span>`
+        : `<span class="service-badge paid">💳 유료 주문</span>`;
+      head.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span>${svcBadge}<span class="cat-tag">(${o.category || ""})</span>
         <span class="stage-badge ${stage}">${STAGE_LABEL[stage]}</span>
         <span class="entry-amt">${fmtWon(orderAmount(o))}</span>`;
       entry.appendChild(head);
