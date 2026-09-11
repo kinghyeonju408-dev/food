@@ -242,7 +242,11 @@ main.screens{flex:1;}
 .ledger-export{align-self:flex-start;flex:none;}
 .ledger-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);
   padding-bottom:110px;}
-.ledger-table{width:100%;border-collapse:collapse;font-size:12.8px;min-width:560px;}
+.ledger-table{width:100%;border-collapse:collapse;font-size:12.8px;min-width:720px;}
+.ledger-table .served-cell{text-align:center;}
+.ledger-table .served-checkbox{width:19px;height:19px;accent-color:var(--mint);cursor:pointer;}
+.ledger-table .served-na{color:var(--text-dim);}
+.ledger-table .served-time{color:var(--text-dim);white-space:nowrap;}
 .ledger-table th{position:sticky;top:0;background:var(--surface-2);color:var(--text-dim);font-size:11px;
   font-weight:700;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
 .ledger-table td{padding:9px 12px;border-bottom:1px solid var(--surface-2);vertical-align:top;}

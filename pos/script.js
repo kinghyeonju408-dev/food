@@ -542,7 +542,7 @@ function renderLedger() {
   const body = document.getElementById("ledgerBody");
   body.innerHTML = "";
   if (rows.length === 0) {
-    body.innerHTML = `<tr><td colspan="5" class="ledger-empty">아직 주문 내역이 없어요</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="ledger-empty">아직 주문 내역이 없어요</td></tr>`;
     return;
   }
   rows.forEach((o) => {
@@ -550,14 +550,52 @@ function renderLedger() {
     const tr = document.createElement("tr");
     if (isRefund) tr.className = "refund-row";
     const itemsStr = (o.items || []).map((it) => `${it.name} ×${it.qty}`).join(", ");
-    tr.innerHTML = `
+
+    const servedTd = document.createElement("td");
+    servedTd.className = "served-cell";
+    if (isRefund) {
+      servedTd.innerHTML = `<span class="served-na">-</span>`;
+    } else {
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "served-checkbox";
+      cb.checked = !!o.servedAt;
+      cb.addEventListener("change", () => toggleServed(o.id, cb.checked));
+      servedTd.appendChild(cb);
+    }
+    tr.appendChild(servedTd);
+
+    const servedTimeTd = document.createElement("td");
+    servedTimeTd.className = "mono served-time";
+    servedTimeTd.textContent = o.servedAt ? fmtDateTime(o.servedAt) : "-";
+    tr.appendChild(servedTimeTd);
+
+    tr.insertAdjacentHTML("beforeend", `
       <td class="mono">${fmtDateTime(o.createdAt)}</td>
       <td>테이블 ${o.tableNum}</td>
       <td>${o.category || ""}${isRefund ? " (환불)" : ""}</td>
       <td>${isRefund ? "↩ " : ""}${itemsStr}</td>
-      <td class="mono amt">${fmtWon(orderAmount(o))}</td>`;
+      <td class="mono amt">${fmtWon(orderAmount(o))}</td>`);
     body.appendChild(tr);
   });
+}
+
+async function toggleServed(orderId, checked) {
+  const servedAt = checked ? new Date().toISOString() : null;
+  try {
+    if (appDb) {
+      await appDb.collection("orders").doc(orderId).update({ servedAt });
+    } else {
+      const o = ordersCache.find((x) => x.id === orderId);
+      if (o) o.servedAt = servedAt;
+      saveLocalData();
+      refreshDataScreens();
+    }
+  } catch (e) {
+    console.error("나감 처리 실패", e);
+    showToast("처리에 실패했어요. 다시 시도해주세요.");
+    renderLedger();
+  }
 }
 
 async function exportExcel() {
@@ -565,10 +603,12 @@ async function exportExcel() {
   const rows = allOrdersSorted();
   const totalAmount = rows.reduce((s, o) => s + orderAmount(o), 0);
 
-  const aoa = [["시간", "테이블", "구분", "주문 내역", "금액"]];
+  const aoa = [["완료", "나간시간", "시간", "테이블", "구분", "주문 내역", "금액"]];
   rows.forEach((o) => {
     const isRefund = o.type === "refund";
     aoa.push([
+      isRefund ? "-" : (o.servedAt ? "완료" : ""),
+      o.servedAt ? fmtDateTime(o.servedAt) : "",
       fmtDateTime(o.createdAt),
       `테이블 ${o.tableNum}`,
       (o.category || "") + (isRefund ? " (환불)" : ""),
@@ -577,10 +617,10 @@ async function exportExcel() {
     ]);
   });
   aoa.push([]);
-  aoa.push(["", "", "", "총 매출", totalAmount]);
+  aoa.push(["", "", "", "", "", "총 매출", totalAmount]);
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 42 }, { wch: 12 }];
+  ws["!cols"] = [{ wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 42 }, { wch: 12 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "주문내역");
   const wbArray = XLSX.write(wb, { bookType: "xlsx", type: "array" });
