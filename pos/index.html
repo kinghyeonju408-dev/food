@@ -15,7 +15,10 @@
     <button id="backBtn" class="icon-btn" hidden aria-label="뒤로">←</button>
     <div class="brand">🍺 일일호프 POS</div>
     <span id="syncDot" class="sync-dot" title="연결 확인 중..."></span>
-    <button id="navBtn" class="nav-btn">📋 테이블별 주문</button>
+    <div class="nav-group">
+      <button id="navRecordsBtn" class="nav-btn secondary">📋 테이블별 주문</button>
+      <button id="navLedgerBtn" class="nav-btn">🧾 정산 시트</button>
+    </div>
   </header>
 
   <main class="screens">
@@ -67,6 +70,32 @@
       </div>
     </section>
 
+    <!-- 정산 시트 (회계용) -->
+    <section id="screen-ledger" class="screen" hidden>
+      <div class="context-bar">
+        <span class="context-pill on">🧾 정산 시트</span>
+        <span class="context-pill">시간순 주문 내역과 총 매출이에요</span>
+      </div>
+
+      <div class="ledger-summary">
+        <div class="ledger-stat"><div class="lab">총 주문 건수</div><div id="ledgerCount" class="num mono">0건</div></div>
+        <div class="ledger-stat highlight"><div class="lab">총 매출</div><div id="ledgerTotal" class="num mono">₩0</div></div>
+        <div class="ledger-stat"><div class="lab">안주 매출</div><div id="ledgerAnju" class="num mono">₩0</div></div>
+        <div class="ledger-stat"><div class="lab">주류·음료 매출</div><div id="ledgerDrink" class="num mono">₩0</div></div>
+      </div>
+
+      <button id="exportExcelBtn" class="btn-primary ledger-export">⬇️ 엑셀 다운로드 (.xlsx)</button>
+
+      <div class="ledger-table-wrap">
+        <table class="ledger-table">
+          <thead>
+            <tr><th>시간</th><th>테이블</th><th>구분</th><th>주문 내역</th><th>금액</th></tr>
+          </thead>
+          <tbody id="ledgerBody"></tbody>
+        </table>
+      </div>
+    </section>
+
   </main>
 
   <!-- 장바구니 바 -->
@@ -89,6 +118,7 @@
         <div id="qtyNum" class="qty-num mono">1</div>
         <button id="qtyPlus" class="qty-btn" aria-label="수량 증가">+</button>
       </div>
+      <div id="qtySubtotal" class="qty-subtotal mono">0원 × 1 = 0원</div>
       <div class="qty-actions">
         <button id="qtyCancelBtn" class="btn-ghost">취소</button>
         <button id="qtyAddBtn" class="btn-primary">장바구니 담기</button>
@@ -99,6 +129,7 @@
   <div id="toast" class="toast"></div>
 
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
