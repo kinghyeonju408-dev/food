@@ -41,11 +41,17 @@ let screen = "home";
 let currentCat = null;
 let currentTable = null;
 let cart = {};              // { 메뉴명: 수량 }
-let modalItem = null;
+
+let modalMode = "add";      // "add" | "refund"
+let modalItem = null;       // add 모드에서 선택한 메뉴명
 let modalQty = 1;
+let refundCtx = null;       // { orderId, itemName, unitPrice, maxQty }
+
+let openDetailTable = null; // 상세 시트가 열려 있는 테이블 번호
+let tickTimer = null;
 
 let appDb = null;           // claude db 네임스페이스 (없으면 로컬 모드)
-let ordersCache = [];       // [{id, tableNum, category, items:[{name,qty}], createdAt, batch}]
+let ordersCache = [];       // 주문(type:"order") + 환불(type:"refund") 문서 목록
 let tablesCache = {};       // { "5": {currentBatch, settlements:[{batch, settledAt}]} }
 
 const LS_ORDERS = "ilhof_pos_orders";
@@ -63,8 +69,21 @@ function fmtDateTime(iso) {
   return d.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 function fmtWon(n) { return "₩" + Math.round(n || 0).toLocaleString("ko-KR"); }
+function fmtElapsed(iso) {
+  const start = new Date(iso).getTime();
+  if (isNaN(start)) return "-";
+  const mins = Math.max(0, Math.round((Date.now() - start) / 60000));
+  if (mins < 60) return `${mins}분`;
+  return `${Math.floor(mins / 60)}시간 ${mins % 60}분`;
+}
 function orderAmount(order) {
-  return (order.items || []).reduce((s, it) => s + (Number(it.price || 0) * Number(it.qty || 0)), 0);
+  if (order && order.amount != null) return Number(order.amount);
+  return (order && order.items || []).reduce((s, it) => s + (Number(it.price || 0) * Number(it.qty || 0)), 0);
+}
+function refundedQtyFor(orderId, itemName) {
+  return ordersCache
+    .filter((o) => o.type === "refund" && o.refundOf === orderId)
+    .reduce((s, r) => s + (r.items || []).filter((it) => it.name === itemName).reduce((s2, it) => s2 + Number(it.qty || 0), 0), 0);
 }
 
 let toastTimer = null;
@@ -92,7 +111,11 @@ function loadLocalData() {
   catch (e) { tablesCache = {}; }
   refreshDataScreens();
 }
-function refreshDataScreens() { renderRecords(); renderLedger(); }
+function refreshDataScreens() {
+  renderRecords();
+  renderLedger();
+  if (openDetailTable) renderTableDetail();
+}
 function saveLocalData() {
   localStorage.setItem(LS_ORDERS, JSON.stringify(ordersCache));
   localStorage.setItem(LS_TABLES, JSON.stringify(tablesCache));
@@ -109,6 +132,9 @@ function setScreen(name) {
   document.getElementById("navRecordsBtn").hidden = name === "records" || name === "tables" || name === "menu";
   document.getElementById("navLedgerBtn").hidden = name === "ledger" || name === "tables" || name === "menu";
   document.getElementById("cartBar").hidden = !(name === "menu" && Object.keys(cart).length > 0);
+
+  clearInterval(tickTimer);
+  if (name === "records") { tickTimer = setInterval(renderRecords, 30000); }
 }
 
 function showHome() { currentCat = null; currentTable = null; cart = {}; setScreen("home"); }
@@ -166,23 +192,55 @@ function renderMenu() {
   renderCartBar();
 }
 
+// ---------------- 수량 모달 (담기 / 환불 공용) ----------------
 function openQtyModal(name) {
+  modalMode = "add";
   modalItem = name;
+  refundCtx = null;
   modalQty = 1;
   document.getElementById("qtyName").textContent = name;
   document.getElementById("qtyNum").textContent = modalQty;
+  document.getElementById("qtyAddBtn").textContent = "장바구니 담기";
+  document.getElementById("qtyAddBtn").classList.remove("btn-refund");
+  document.getElementById("qtySubtotal").classList.remove("neg");
   updateQtySubtotal();
   document.getElementById("qtyModal").hidden = false;
 }
-function closeQtyModal() { document.getElementById("qtyModal").hidden = true; modalItem = null; }
+function openRefundModal(order, itemName, maxQty) {
+  if (maxQty <= 0) return;
+  modalMode = "refund";
+  modalItem = itemName;
+  const srcItem = (order.items || []).find((it) => it.name === itemName) || {};
+  refundCtx = { orderId: order.id, itemName, unitPrice: Number(srcItem.price != null ? srcItem.price : (PRICE[itemName] || 0)), maxQty };
+  modalQty = 1;
+  document.getElementById("qtyName").textContent = `${itemName} 환불 (테이블 ${order.tableNum})`;
+  document.getElementById("qtyNum").textContent = modalQty;
+  document.getElementById("qtyAddBtn").textContent = "환불 처리";
+  document.getElementById("qtyAddBtn").classList.add("btn-refund");
+  document.getElementById("qtySubtotal").classList.add("neg");
+  updateQtySubtotal();
+  document.getElementById("qtyModal").hidden = false;
+}
+function closeQtyModal() {
+  document.getElementById("qtyModal").hidden = true;
+  modalItem = null;
+  refundCtx = null;
+}
+function currentModalMax() { return modalMode === "refund" ? (refundCtx ? refundCtx.maxQty : 1) : 99; }
+function currentModalPrice() { return modalMode === "refund" ? (refundCtx ? refundCtx.unitPrice : 0) : (PRICE[modalItem] || 0); }
 function updateQtySubtotal() {
-  const price = PRICE[modalItem] || 0;
-  document.getElementById("qtySubtotal").textContent = `${fmtWon(price)} × ${modalQty} = ${fmtWon(price * modalQty)}`;
+  const price = currentModalPrice();
+  const sign = modalMode === "refund" ? "-" : "";
+  document.getElementById("qtySubtotal").textContent = `${fmtWon(price)} × ${modalQty} = ${sign}${fmtWon(price * modalQty)}`;
 }
 function stepQty(delta) {
-  modalQty = Math.max(1, Math.min(99, modalQty + delta));
+  modalQty = Math.max(1, Math.min(currentModalMax(), modalQty + delta));
   document.getElementById("qtyNum").textContent = modalQty;
   updateQtySubtotal();
+}
+function confirmModalAction() {
+  if (modalMode === "refund") submitRefund();
+  else addModalToCart();
 }
 function addModalToCart() {
   if (!modalItem) return;
@@ -225,6 +283,7 @@ async function submitOrder() {
 
   const batch = (tablesCache[String(currentTable)] && tablesCache[String(currentTable)].currentBatch) || 1;
   const order = {
+    type: "order",
     tableNum: currentTable,
     category: MENU[currentCat].label,
     items,
@@ -254,71 +313,185 @@ async function submitOrder() {
   }
 }
 
-// ---------------- 테이블별 주문 기록 화면 ----------------
+async function submitRefund() {
+  if (!refundCtx) return;
+  const order = ordersCache.find((o) => o.id === refundCtx.orderId);
+  if (!order) { showToast("원래 주문을 찾을 수 없어요. 새로고침 후 다시 시도해주세요."); return; }
+
+  const orderedQty = ((order.items || []).find((it) => it.name === refundCtx.itemName) || {}).qty || 0;
+  const freshRemaining = Math.max(0, orderedQty - refundedQtyFor(order.id, refundCtx.itemName));
+  if (freshRemaining <= 0) { showToast("이미 다른 곳에서 환불 처리됐어요."); closeQtyModal(); return; }
+
+  const addBtn = document.getElementById("qtyAddBtn");
+  addBtn.disabled = true;
+
+  const qty = Math.min(modalQty, freshRemaining);
+  const refundDoc = {
+    type: "refund",
+    tableNum: order.tableNum,
+    category: order.category,
+    items: [{ name: refundCtx.itemName, qty, price: refundCtx.unitPrice }],
+    amount: -(refundCtx.unitPrice * qty),
+    createdAt: new Date().toISOString(),
+    batch: order.batch,
+    refundOf: order.id,
+  };
+
+  try {
+    if (appDb) {
+      await appDb.collection("orders").add(refundDoc);
+    } else {
+      refundDoc.id = "local-refund-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+      ordersCache.push(refundDoc);
+      saveLocalData();
+      refreshDataScreens();
+    }
+    showToast(`환불 처리했어요. (${refundCtx.itemName} ×${qty})`);
+    closeQtyModal();
+  } catch (e) {
+    console.error("환불 처리 실패", e);
+    showToast("환불 처리에 실패했어요. 다시 시도해주세요.");
+  } finally {
+    addBtn.disabled = false;
+  }
+}
+
+// ---------------- 테이블별 주문 화면 (한눈에 보기) ----------------
+function ordersForTable(n) {
+  return ordersCache.filter((o) => Number(o.tableNum) === n);
+}
+
 function renderRecords() {
   if (screen !== "records") return;
-  const grid = document.getElementById("recordsGrid");
-  grid.innerHTML = "";
+  const g1 = document.getElementById("recordGrid1F"); g1.innerHTML = "";
+  const g2 = document.getElementById("recordGridB1"); g2.innerHTML = "";
 
   for (let n = 1; n <= TABLE_COUNT; n++) {
     const floor = n <= FIRST_FLOOR_MAX ? "1층" : "지하 1층";
     const tstate = tablesCache[String(n)] || { currentBatch: 1, settlements: [] };
-    const myOrders = ordersCache
-      .filter((o) => Number(o.tableNum) === n)
-      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-
-    const card = document.createElement("div");
-    card.className = "table-card";
-
-    const tableTotal = myOrders.reduce((s, o) => s + orderAmount(o), 0);
-    const head = document.createElement("div");
-    head.className = "table-card-head";
-    head.innerHTML = `<span class="tno">테이블 ${n}</span><span class="floor">${floor} · ${fmtWon(tableTotal)}</span>`;
-    card.appendChild(head);
-
-    const log = document.createElement("div");
-    log.className = "order-log";
-    if (myOrders.length === 0) {
-      log.innerHTML = `<div class="order-empty">아직 주문이 없어요</div>`;
-    } else {
-      let lastBatch = null;
-      myOrders.forEach((o) => {
-        if (lastBatch !== null && o.batch !== lastBatch) {
-          const settleInfo = (tstate.settlements || []).find((s) => s.batch === lastBatch);
-          const div = document.createElement("div");
-          div.className = "settle-divider";
-          div.innerHTML = `<span class="line"></span><span class="tag">💳 계산 완료${settleInfo ? " · " + fmtTime(settleInfo.settledAt) : ""}</span><span class="line"></span>`;
-          log.appendChild(div);
-        }
-        const entry = document.createElement("div");
-        entry.className = "order-entry";
-        const itemsStr = (o.items || []).map((it) => `${it.name} ×${it.qty}`).join(", ");
-        entry.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span>${itemsStr}
-          <span class="cat-tag">(${o.category || ""})</span>
-          <span class="entry-amt mono">${fmtWon(orderAmount(o))}</span>`;
-        log.appendChild(entry);
-        lastBatch = o.batch;
-      });
-    }
-    card.appendChild(log);
-
     const openBatch = tstate.currentBatch || 1;
-    const hasOpen = myOrders.some((o) => o.batch === openBatch);
-    const settleBtn = document.createElement("button");
-    settleBtn.className = "settle-btn";
-    settleBtn.textContent = hasOpen ? "💳 계산 완료 처리" : "정산할 주문 없음";
-    settleBtn.disabled = !hasOpen;
-    settleBtn.addEventListener("click", () => settleTable(n));
-    card.appendChild(settleBtn);
+    const openOrders = ordersForTable(n).filter((o) => o.batch === openBatch);
+    const openTakenOrders = openOrders.filter((o) => o.type !== "refund").sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
 
-    grid.appendChild(card);
+    const tile = document.createElement("button");
+    tile.className = "record-tile " + (openTakenOrders.length > 0 ? "active" : "idle");
+
+    if (openTakenOrders.length > 0) {
+      const currentAmount = openOrders.reduce((s, o) => s + orderAmount(o), 0);
+      const lastOrder = openTakenOrders[openTakenOrders.length - 1];
+      const lastItems = (lastOrder.items || []).map((it) => it.name);
+      const recentStr = lastItems.length > 1 ? `${lastItems[0]} 외 ${lastItems.length - 1}건` : (lastItems[0] || "-");
+      tile.innerHTML = `
+        <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor}</span></div>
+        <div class="rt-recent">${recentStr}</div>
+        <div class="rt-elapsed">⏱ 첫 주문 후 ${fmtElapsed(openTakenOrders[0].createdAt)}</div>
+        <div class="rt-amount">${fmtWon(currentAmount)}</div>`;
+    } else {
+      tile.innerHTML = `
+        <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor}</span></div>
+        <div class="rt-empty">주문 대기중</div>`;
+    }
+    tile.addEventListener("click", () => openTableDetail(n));
+    (n <= FIRST_FLOOR_MAX ? g1 : g2).appendChild(tile);
   }
+}
+
+function openTableDetail(n) {
+  openDetailTable = n;
+  renderTableDetail();
+  document.getElementById("tableDetailModal").hidden = false;
+}
+function closeTableDetail() {
+  document.getElementById("tableDetailModal").hidden = true;
+  openDetailTable = null;
+}
+
+function renderTableDetail() {
+  const n = openDetailTable;
+  if (!n) return;
+  const floor = n <= FIRST_FLOOR_MAX ? "1층" : "지하 1층";
+  document.getElementById("detailTitle").textContent = `테이블 ${n} · ${floor}`;
+
+  const tstate = tablesCache[String(n)] || { currentBatch: 1, settlements: [] };
+  const myOrders = ordersForTable(n).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+
+  const body = document.getElementById("detailBody");
+  body.innerHTML = "";
+
+  if (myOrders.length === 0) {
+    body.innerHTML = `<div class="order-empty">아직 주문이 없어요</div>`;
+  } else {
+    let lastBatch = null;
+    myOrders.forEach((o) => {
+      if (lastBatch !== null && o.batch !== lastBatch) {
+        const settleInfo = (tstate.settlements || []).find((s) => s.batch === lastBatch);
+        const div = document.createElement("div");
+        div.className = "settle-divider";
+        div.innerHTML = `<span class="line"></span><span class="tag">💳 계산 완료${settleInfo ? " · " + fmtTime(settleInfo.settledAt) : ""}</span><span class="line"></span>`;
+        body.appendChild(div);
+      }
+      lastBatch = o.batch;
+
+      if (o.type === "refund") {
+        const it = (o.items || [])[0] || {};
+        const entry = document.createElement("div");
+        entry.className = "order-entry refund-entry";
+        entry.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span>↩ 환불 · ${it.name || ""} ×${it.qty || 0}
+          <span class="entry-amt neg">${fmtWon(orderAmount(o))}</span>`;
+        body.appendChild(entry);
+        return;
+      }
+
+      const entry = document.createElement("div");
+      entry.className = "order-entry";
+      const head = document.createElement("div");
+      head.className = "oe-head";
+      head.innerHTML = `<span class="t">${fmtTime(o.createdAt)}</span><span class="cat-tag">(${o.category || ""})</span>
+        <span class="entry-amt">${fmtWon(orderAmount(o))}</span>`;
+      entry.appendChild(head);
+
+      const itemsWrap = document.createElement("div");
+      itemsWrap.className = "oe-items";
+      (o.items || []).forEach((it) => {
+        const refunded = refundedQtyFor(o.id, it.name);
+        const remaining = Math.max(0, Number(it.qty || 0) - refunded);
+        const chip = document.createElement("span");
+        chip.className = "item-chip" + (remaining <= 0 ? " refunded" : "");
+        const qtyLabel = remaining < it.qty ? `×${remaining} (원래 ×${it.qty})` : `×${it.qty}`;
+        chip.innerHTML = `<span>${it.name} ${qtyLabel}</span>`;
+        if (remaining > 0) {
+          const rbtn = document.createElement("button");
+          rbtn.className = "refund-btn";
+          rbtn.textContent = "환불";
+          rbtn.addEventListener("click", () => openRefundModal(o, it.name, remaining));
+          chip.appendChild(rbtn);
+        } else {
+          const tag = document.createElement("span");
+          tag.className = "refunded-tag";
+          tag.textContent = "환불완료";
+          chip.appendChild(tag);
+        }
+        itemsWrap.appendChild(chip);
+      });
+      entry.appendChild(itemsWrap);
+      body.appendChild(entry);
+    });
+  }
+
+  const openBatch = tstate.currentBatch || 1;
+  const hasOpen = myOrders.some((o) => o.batch === openBatch && o.type !== "refund");
+  const settleBtn = document.createElement("button");
+  settleBtn.className = "settle-btn";
+  settleBtn.textContent = hasOpen ? "💳 계산 완료 처리" : "정산할 주문 없음";
+  settleBtn.disabled = !hasOpen;
+  settleBtn.addEventListener("click", () => settleTable(n));
+  body.appendChild(settleBtn);
 }
 
 async function settleTable(n) {
   const cur = tablesCache[String(n)] || { currentBatch: 1, settlements: [] };
   const openBatch = cur.currentBatch || 1;
-  const hasOpenOrders = ordersCache.some((o) => Number(o.tableNum) === n && o.batch === openBatch);
+  const hasOpenOrders = ordersCache.some((o) => Number(o.tableNum) === n && o.batch === openBatch && o.type !== "refund");
   if (!hasOpenOrders) return;
 
   const newDoc = {
@@ -365,13 +538,15 @@ function renderLedger() {
     return;
   }
   rows.forEach((o) => {
+    const isRefund = o.type === "refund";
     const tr = document.createElement("tr");
+    if (isRefund) tr.className = "refund-row";
     const itemsStr = (o.items || []).map((it) => `${it.name} ×${it.qty}`).join(", ");
     tr.innerHTML = `
       <td class="mono">${fmtDateTime(o.createdAt)}</td>
       <td>테이블 ${o.tableNum}</td>
-      <td>${o.category || ""}</td>
-      <td>${itemsStr}</td>
+      <td>${o.category || ""}${isRefund ? " (환불)" : ""}</td>
+      <td>${isRefund ? "↩ " : ""}${itemsStr}</td>
       <td class="mono amt">${fmtWon(orderAmount(o))}</td>`;
     body.appendChild(tr);
   });
@@ -384,11 +559,12 @@ async function exportExcel() {
 
   const aoa = [["시간", "테이블", "구분", "주문 내역", "금액"]];
   rows.forEach((o) => {
+    const isRefund = o.type === "refund";
     aoa.push([
       fmtDateTime(o.createdAt),
       `테이블 ${o.tableNum}`,
-      o.category || "",
-      (o.items || []).map((it) => `${it.name} x${it.qty}`).join(", "),
+      (o.category || "") + (isRefund ? " (환불)" : ""),
+      (isRefund ? "환불: " : "") + (o.items || []).map((it) => `${it.name} x${it.qty}`).join(", "),
       orderAmount(o),
     ]);
   });
@@ -396,7 +572,7 @@ async function exportExcel() {
   aoa.push(["", "", "", "총 매출", totalAmount]);
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 42 }, { wch: 12 }];
+  ws["!cols"] = [{ wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 42 }, { wch: 12 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "주문내역");
   const wbArray = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -458,10 +634,14 @@ function wireStaticUI() {
   document.getElementById("exportExcelBtn").addEventListener("click", exportExcel);
   document.getElementById("qtyMinus").addEventListener("click", () => stepQty(-1));
   document.getElementById("qtyPlus").addEventListener("click", () => stepQty(1));
-  document.getElementById("qtyAddBtn").addEventListener("click", addModalToCart);
+  document.getElementById("qtyAddBtn").addEventListener("click", confirmModalAction);
   document.getElementById("qtyCancelBtn").addEventListener("click", closeQtyModal);
   document.getElementById("qtyModal").addEventListener("click", (e) => {
     if (e.target.id === "qtyModal") closeQtyModal();
+  });
+  document.getElementById("detailCloseBtn").addEventListener("click", closeTableDetail);
+  document.getElementById("tableDetailModal").addEventListener("click", (e) => {
+    if (e.target.id === "tableDetailModal") closeTableDetail();
   });
   document.getElementById("cartConfirmBtn").addEventListener("click", submitOrder);
   document.getElementById("cartClearBtn").addEventListener("click", clearCart);

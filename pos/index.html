@@ -61,10 +61,13 @@
     <!-- 테이블별 주문 기록 -->
     <section id="screen-records" class="screen" hidden>
       <div class="context-bar">
-        <span class="context-pill on">📋 테이블별 주문 기록</span>
-        <span class="context-pill">굵은 선 아래는 계산 완료 후 새로 들어온 주문이에요</span>
+        <span class="context-pill on">📋 테이블별 주문</span>
+        <span class="context-pill">테이블을 눌러 전체 내역 · 환불 · 계산 완료를 처리하세요</span>
       </div>
-      <div id="recordsGrid" class="records-grid"></div>
+      <div class="section-label">1층 <span class="badge">1~10</span></div>
+      <div id="recordGrid1F" class="record-grid"></div>
+      <div class="section-label">지하 1층 <span class="badge">11~22</span></div>
+      <div id="recordGridB1" class="record-grid"></div>
       <div class="reset-row">
         <button id="resetLink" class="reset-link">🧹 전체 주문 기록 초기화 (행사 시작 전 테스트 데이터 삭제용)</button>
       </div>
@@ -123,6 +126,17 @@
         <button id="qtyCancelBtn" class="btn-ghost">취소</button>
         <button id="qtyAddBtn" class="btn-primary">장바구니 담기</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 테이블 상세 시트 -->
+  <div id="tableDetailModal" class="modal-overlay" hidden>
+    <div class="detail-card">
+      <div class="detail-head">
+        <span id="detailTitle" class="detail-title">테이블</span>
+        <button id="detailCloseBtn" class="icon-btn" aria-label="닫기">✕</button>
+      </div>
+      <div id="detailBody" class="detail-body"></div>
     </div>
   </div>
 
