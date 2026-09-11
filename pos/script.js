@@ -4,33 +4,44 @@
 const MENU = {
   anju:  { label: "안주",        emoji: "🍢",
     items: [
-      { name: "짜파게티 감바스", price: 12000 },
-      { name: "신라면 볶음밥",   price: 8000 },
-      { name: "김치 어묵탕",     price: 7000 },
-      { name: "불닭냉면",       price: 7000 },
-      { name: "마른안주 플레터", price: 9000 },
-      { name: "프렌치 토스트",   price: 6000 },
-      { name: "옥수수전",       price: 7500 },
-      { name: "쏘야",           price: 7500 },
+      { name: "짜파게티 감바스", price: 12000, stock: 40 },
+      { name: "신라면 볶음밥",   price: 8000,  stock: 50 },
+      { name: "김치 어묵탕",     price: 7000,  stock: 40 },
+      { name: "불닭냉면",       price: 7000,  stock: 40 },
+      { name: "마른안주 플레터", price: 9000,  stock: 40 },
+      { name: "프렌치 토스트",   price: 6000,  stock: 45 },
+      { name: "옥수수전",       price: 7500,  stock: 40 },
+      { name: "쏘야",           price: 7500,  stock: 50 },
     ] },
   drink: { label: "주류 및 음료", emoji: "🍻",
     items: [
-      { name: "소주",           price: 5000 },
-      { name: "맥주",           price: 5000 },
-      { name: "메롱주",         price: 5000 },
-      { name: "봉알주",         price: 4500 },
-      { name: "요쏘",           price: 4500 },
-      { name: "황도소다 하이볼", price: 5000 },
-      { name: "콜라",           price: 2000 },
-      { name: "제로콜라",       price: 2000 },
-      { name: "사이다",         price: 2000 },
+      { name: "소주",           price: 5000, stock: Infinity },
+      { name: "맥주",           price: 5000, stock: Infinity },
+      { name: "메롱주",         price: 5000, stock: 30 },
+      { name: "봉알주",         price: 4500, stock: 30 },
+      { name: "요쏘",           price: 4500, stock: 30 },
+      { name: "황도소다 하이볼", price: 5000, stock: 30 },
+      { name: "콜라",           price: 2000, stock: Infinity },
+      { name: "제로콜라",       price: 2000, stock: Infinity },
+      { name: "사이다",         price: 2000, stock: Infinity },
     ] },
 };
 
-// 메뉴명 -> 가격 / 카테고리 조회용
+// 테이블 선택 후 나오는 "쿠폰 서비스"/"친구 서비스"는 안주+주류를 합친 목록에서 고름
+const ALL_ITEMS = [...MENU.anju.items, ...MENU.drink.items];
+const SERVICE_CATS = {
+  coupon: { label: "쿠폰 서비스", emoji: "🎟️" },
+  friend: { label: "친구 서비스", emoji: "🤝" },
+};
+function isServiceCat(cat) { return cat === "coupon" || cat === "friend"; }
+
+// 메뉴명 -> 가격 / 카테고리 / 초기 재고 조회용
 const PRICE = {};
 const ITEM_CAT = {};
-Object.values(MENU).forEach((cat) => cat.items.forEach((it) => { PRICE[it.name] = it.price; ITEM_CAT[it.name] = cat.label; }));
+const INITIAL_STOCK = {};
+Object.values(MENU).forEach((cat) => cat.items.forEach((it) => {
+  PRICE[it.name] = it.price; ITEM_CAT[it.name] = cat.label; INITIAL_STOCK[it.name] = it.stock;
+}));
 
 const TABLE_COUNT = 22;
 const FIRST_FLOOR_MAX = 10; // 1~10: 1층, 11~22: 지하1층
@@ -55,10 +66,12 @@ let appDb = null;           // claude db 네임스페이스 (없으면 로컬 �
 let ordersCache = [];       // 주문(type:"order") + 환불(type:"refund") 문서 목록
 let tablesCache = {};       // { "5": {currentBatch, settlements:[{batch, settledAt}]} }
 let waitingCache = [];      // [{id, name, partySize, phone, createdAt}]
+let manualSoldOut = {};     // { 메뉴명: true } — 주방팀이 직접 표시한 "진짜 품절"
 
 const LS_ORDERS = "ilhof_pos_orders";
 const LS_TABLES = "ilhof_pos_tables";
 const LS_WAITING = "ilhof_pos_waiting";
+const LS_SOLDOUT = "ilhof_pos_soldout";
 const OVERTIME_MINUTES = 120; // 첫 주문 후 이 시간이 지나면 테이블이 빨간색으로 표시됨
 
 // ---------------- 유틸 ----------------
@@ -93,6 +106,27 @@ function refundedQtyFor(orderId, itemName) {
     .reduce((s, r) => s + (r.items || []).filter((it) => it.name === itemName).reduce((s2, it) => s2 + Number(it.qty || 0), 0), 0);
 }
 
+// ---------------- 재고 ----------------
+// 소진량 = 실제 나간 주문(쿠폰/친구 서비스 포함) - 환불로 돌아온 수량
+function consumedQty(name) {
+  let sold = 0, refunded = 0;
+  ordersCache.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      if (it.name !== name) return;
+      if (o.type === "order") sold += Number(it.qty || 0);
+      else if (o.type === "refund") refunded += Number(it.qty || 0);
+    });
+  });
+  return Math.max(0, sold - refunded);
+}
+function remainingStock(name) {
+  const initial = INITIAL_STOCK[name];
+  if (initial === Infinity || initial == null) return Infinity;
+  return initial - consumedQty(name);
+}
+function isHardSoldOut(name) { return !!manualSoldOut[name]; }
+function fmtStock(remaining) { return remaining === Infinity ? "무제한" : `${remaining}개`; }
+
 let toastTimer = null;
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -118,22 +152,27 @@ function loadLocalData() {
   catch (e) { tablesCache = {}; }
   try { waitingCache = JSON.parse(localStorage.getItem(LS_WAITING) || "[]"); }
   catch (e) { waitingCache = []; }
+  try { manualSoldOut = JSON.parse(localStorage.getItem(LS_SOLDOUT) || "{}"); }
+  catch (e) { manualSoldOut = {}; }
   refreshDataScreens();
 }
 function refreshDataScreens() {
   renderRecords();
   renderLedger();
+  renderStockPanel();
   renderWaitingList();
   updateWaitingBadge();
   if (openDetailTable) renderTableDetail();
+  if (screen === "menu") renderMenu();
 }
 function saveLocalData() {
   localStorage.setItem(LS_ORDERS, JSON.stringify(ordersCache));
   localStorage.setItem(LS_TABLES, JSON.stringify(tablesCache));
   localStorage.setItem(LS_WAITING, JSON.stringify(waitingCache));
+  localStorage.setItem(LS_SOLDOUT, JSON.stringify(manualSoldOut));
 }
 window.addEventListener("storage", (e) => {
-  if (!appDb && (e.key === LS_ORDERS || e.key === LS_TABLES || e.key === LS_WAITING)) loadLocalData();
+  if (!appDb && [LS_ORDERS, LS_TABLES, LS_WAITING, LS_SOLDOUT].includes(e.key)) loadLocalData();
 });
 
 // ---------------- 화면 전환 ----------------
@@ -188,16 +227,37 @@ function renderCategoryScreen() {
 
 // ---------------- 메뉴 & 장바구니 화면 ----------------
 function renderMenu() {
-  const cat = MENU[currentCat];
+  const isService = isServiceCat(currentCat);
+  const catInfo = isService ? SERVICE_CATS[currentCat] : MENU[currentCat];
   document.getElementById("menuContext").innerHTML =
-    `<span class="context-pill on">${cat.emoji} ${cat.label}</span><span class="context-pill on">🍽 테이블 ${currentTable}</span>`;
+    `<span class="context-pill on">${catInfo.emoji} ${catInfo.label}</span><span class="context-pill on">🍽 테이블 ${currentTable}</span>`;
 
+  const items = isService ? ALL_ITEMS : MENU[currentCat].items;
   const grid = document.getElementById("menuGrid");
   grid.innerHTML = "";
-  cat.items.forEach(({ name, price }) => {
+  items.forEach(({ name, price }) => {
+    const remaining = remainingStock(name);
+    const hard = isHardSoldOut(name);
+    const soft = !hard && remaining <= 0;
+
     const btn = document.createElement("button");
-    btn.className = "menu-item";
-    btn.innerHTML = `<span class="mi-name">${name}</span><span class="mi-price mono">${fmtWon(price)}</span>`;
+    btn.className = "menu-item" + (hard ? " hard-soldout" : "");
+    btn.disabled = hard;
+
+    if (isService) {
+      const lowStock = remaining !== Infinity && remaining <= 10;
+      btn.innerHTML = `
+        <span class="mi-name">${name}</span>
+        <span class="mi-price mono mi-price-free">${fmtWon(price)} → 무료</span>
+        <span class="mi-stock mono${lowStock ? " low" : ""}">재고 ${fmtStock(remaining)}</span>
+        ${hard ? `<span class="mi-soldout">품절</span>` : ""}`;
+    } else {
+      btn.innerHTML = `
+        <span class="mi-name">${name}</span>
+        <span class="mi-price mono">${fmtWon(price)}</span>
+        ${(hard || soft) ? `<span class="mi-soldout">품절</span>` : ""}`;
+    }
+
     const qty = cart[name];
     if (qty) {
       const badge = document.createElement("span");
@@ -205,7 +265,7 @@ function renderMenu() {
       badge.textContent = qty;
       btn.appendChild(badge);
     }
-    btn.addEventListener("click", () => openQtyModal(name));
+    if (!hard) btn.addEventListener("click", () => openQtyModal(name));
     grid.appendChild(btn);
   });
   renderCartBar();
@@ -249,8 +309,13 @@ function currentModalMax() { return modalMode === "refund" ? (refundCtx ? refund
 function currentModalPrice() { return modalMode === "refund" ? (refundCtx ? refundCtx.unitPrice : 0) : (PRICE[modalItem] || 0); }
 function updateQtySubtotal() {
   const price = currentModalPrice();
+  const el = document.getElementById("qtySubtotal");
+  if (modalMode === "add" && isServiceCat(currentCat)) {
+    el.textContent = `무료 서비스 × ${modalQty}  (원가 ${fmtWon(price * modalQty)})`;
+    return;
+  }
   const sign = modalMode === "refund" ? "-" : "";
-  document.getElementById("qtySubtotal").textContent = `${fmtWon(price)} × ${modalQty} = ${sign}${fmtWon(price * modalQty)}`;
+  el.textContent = `${fmtWon(price)} × ${modalQty} = ${sign}${fmtWon(price * modalQty)}`;
 }
 function stepQty(delta) {
   modalQty = Math.max(1, Math.min(currentModalMax(), modalQty + delta));
@@ -274,6 +339,7 @@ function renderCartBar() {
   if (!(screen === "menu" || screen === "category") || entries.length === 0) { bar.hidden = true; return; }
   bar.hidden = false;
 
+  const isService = isServiceCat(currentCat);
   const chips = document.getElementById("cartChips");
   chips.innerHTML = "";
   let totalQty = 0, totalAmount = 0;
@@ -289,13 +355,18 @@ function renderCartBar() {
     chip.appendChild(rm);
     chips.appendChild(chip);
   });
-  document.getElementById("cartConfirmBtn").textContent = `주문 확정하기 (${totalQty}개 · ${fmtWon(totalAmount)})`;
+  document.getElementById("cartConfirmBtn").textContent = isService
+    ? `무료 서비스로 확정하기 (${totalQty}개 · 원가 ${fmtWon(totalAmount)})`
+    : `주문 확정하기 (${totalQty}개 · ${fmtWon(totalAmount)})`;
 }
 function refreshCartUI() { if (screen === "menu") renderMenu(); else renderCartBar(); }
 function clearCart() { cart = {}; refreshCartUI(); }
 
 async function submitOrder() {
-  const items = Object.entries(cart).map(([name, qty]) => ({ name, qty, price: PRICE[name] || 0, cat: ITEM_CAT[name] }));
+  const isService = isServiceCat(currentCat);
+  const items = Object.entries(cart).map(([name, qty]) => ({
+    name, qty, price: isService ? 0 : (PRICE[name] || 0), cat: ITEM_CAT[name],
+  }));
   if (items.length === 0 || !currentTable) return;
 
   const confirmBtn = document.getElementById("cartConfirmBtn");
@@ -305,9 +376,11 @@ async function submitOrder() {
   const order = {
     type: "order",
     tableNum: currentTable,
-    category: [...new Set(items.map((it) => it.cat))].join(" · "),
+    category: isService ? SERVICE_CATS[currentCat].label : [...new Set(items.map((it) => it.cat))].join(" · "),
+    service: isService ? currentCat : null,
     items,
     amount: items.reduce((s, it) => s + it.price * it.qty, 0),
+    compValue: isService ? Object.entries(cart).reduce((s, [name, qty]) => s + (PRICE[name] || 0) * qty, 0) : 0,
     createdAt: new Date().toISOString(),
     batch,
   };
@@ -558,11 +631,15 @@ function renderLedger() {
     .reduce((s2, it) => s2 + (o.type === "refund" ? -1 : 1) * Number(it.price || 0) * Number(it.qty || 0), 0), 0);
   const anjuTotal = categoryTotal(MENU.anju.label);
   const drinkTotal = categoryTotal(MENU.drink.label);
+  const couponValue = rows.filter((o) => o.service === "coupon").reduce((s, o) => s + Number(o.compValue || 0), 0);
+  const friendValue = rows.filter((o) => o.service === "friend").reduce((s, o) => s + Number(o.compValue || 0), 0);
 
   document.getElementById("ledgerCount").textContent = rows.length + "건";
   document.getElementById("ledgerTotal").textContent = fmtWon(totalAmount);
   document.getElementById("ledgerAnju").textContent = fmtWon(anjuTotal);
   document.getElementById("ledgerDrink").textContent = fmtWon(drinkTotal);
+  document.getElementById("ledgerCoupon").textContent = fmtWon(couponValue);
+  document.getElementById("ledgerFriend").textContent = fmtWon(friendValue);
 
   const body = document.getElementById("ledgerBody");
   body.innerHTML = "";
@@ -620,6 +697,55 @@ function renderLedger() {
       <td class="mono amt">${fmtWon(orderAmount(o))}</td>`);
     body.appendChild(tr);
   });
+}
+
+// ---------------- 재고 관리 (정산 시트) ----------------
+function renderStockPanel() {
+  if (screen !== "ledger") return;
+  const grid = document.getElementById("stockGrid");
+  grid.innerHTML = "";
+  ALL_ITEMS.forEach(({ name }) => {
+    const remaining = remainingStock(name);
+    const initial = INITIAL_STOCK[name];
+    const hard = isHardSoldOut(name);
+    const soft = !hard && remaining <= 0;
+
+    const item = document.createElement("div");
+    item.className = "stock-item" + (hard ? " hard" : soft ? " soft" : "");
+    item.innerHTML = `
+      <div class="si-main">
+        <span class="si-name">${name}</span>
+        <span class="si-qty mono">${initial === Infinity ? "무제한" : `${remaining}/${initial}개`}</span>
+      </div>`;
+    const btn = document.createElement("button");
+    btn.className = "si-toggle" + (hard ? " on" : "");
+    btn.textContent = hard ? "품절 해제" : "품절 처리";
+    btn.addEventListener("click", () => toggleManualSoldOut(name, !hard));
+    item.appendChild(btn);
+    grid.appendChild(item);
+  });
+}
+
+async function toggleManualSoldOut(name, value) {
+  try {
+    if (appDb) {
+      const ref = appDb.doc("meta/soldout");
+      try {
+        await ref.update({ items: { [name]: value } });
+      } catch (e) {
+        if (e && e.code === "invalid_argument") await ref.set({ items: { [name]: value } });
+        else throw e;
+      }
+    } else {
+      manualSoldOut[name] = value;
+      saveLocalData();
+      refreshDataScreens();
+    }
+    showToast(value ? `${name} 품절 처리했어요.` : `${name} 품절을 해제했어요.`);
+  } catch (e) {
+    console.error("품절 처리 실패", e);
+    showToast("처리에 실패했어요. 다시 시도해주세요.");
+  }
 }
 
 async function toggleConfirmed(orderId, checked) {
@@ -721,10 +847,12 @@ async function resetAll() {
       await Promise.all(tsnap.docs.map((d) => appDb.collection("tables").doc(d.id).delete()));
       const wsnap = await appDb.collection("waiting").limit(1000).get();
       await Promise.all(wsnap.docs.map((d) => appDb.collection("waiting").doc(d.id).delete()));
+      await appDb.doc("meta/soldout").set({ items: {} });
     } else {
       ordersCache = [];
       tablesCache = {};
       waitingCache = [];
+      manualSoldOut = {};
       saveLocalData();
       refreshDataScreens();
     }
@@ -874,6 +1002,13 @@ async function boot() {
             refreshDataScreens();
           },
           (err) => console.error("waiting 구독 오류", err)
+        );
+        appDb.doc("meta/soldout").onSnapshot(
+          (snap) => {
+            manualSoldOut = (snap.data() || {}).items || {};
+            refreshDataScreens();
+          },
+          (err) => console.error("soldout 구독 오류", err)
         );
       }
     }

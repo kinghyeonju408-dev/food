@@ -13,6 +13,10 @@
   --mint-soft:#e3f4ea;
   --rose:#c23350;
   --rose-soft:#fbe4e8;
+  --violet:#7c5cbf;
+  --violet-soft:#efe7fa;
+  --teal:#1f8a86;
+  --teal-soft:#e2f5f4;
   --shadow:0 10px 24px -12px rgba(30,25,15,.18);
 }
 *{box-sizing:border-box;}
@@ -92,6 +96,10 @@ main.screens{flex:1;}
 .category-card.anju:active,.category-card.anju:hover{border-color:var(--amber);}
 .category-card.drink{border-color:#bfe0d3;}
 .category-card.drink:active,.category-card.drink:hover{border-color:var(--mint);}
+.category-card.coupon{border-color:#ddd0f0;}
+.category-card.coupon:active,.category-card.coupon:hover{border-color:var(--violet);}
+.category-card.friend{border-color:#bfe6e3;}
+.category-card.friend:active,.category-card.friend:hover{border-color:var(--teal);}
 .cat-emoji{font-size:46px;}
 .cat-name{font-family:"Black Han Sans",sans-serif;font-size:22px;}
 .cat-hint{font-size:12px;color:var(--text-dim);}
@@ -123,6 +131,13 @@ main.screens{flex:1;}
 }
 .menu-item:active{border-color:var(--amber);background:var(--surface-2);}
 .menu-item .mi-price{font-size:12px;font-weight:600;color:var(--amber);}
+.menu-item .mi-price-free{color:var(--teal);text-decoration:line-through;text-decoration-color:var(--text-dim);}
+.menu-item .mi-stock{font-size:10.5px;font-weight:600;color:var(--text-dim);}
+.menu-item .mi-stock.low{color:var(--rose);}
+.menu-item .mi-soldout{font-size:10.5px;font-weight:800;color:var(--rose);background:var(--rose-soft);
+  border-radius:999px;padding:2px 9px;}
+.menu-item.hard-soldout{opacity:.45;cursor:not-allowed;}
+.menu-item.hard-soldout:active{background:var(--surface);border-color:var(--border);}
 .menu-item .qty-badge{
   position:absolute;top:-8px;right:-8px;background:var(--amber);color:#241a08;
   font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:13px;
@@ -244,13 +259,17 @@ main.screens{flex:1;}
   cursor:pointer;padding:8px;}
 
 /* ---------- 정산 시트 ---------- */
-.ledger-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.ledger-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 @media(max-width:640px){.ledger-summary{grid-template-columns:1fr 1fr;}}
 .ledger-stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 12px;text-align:center;}
 .ledger-stat .lab{font-size:11px;color:var(--text-dim);margin-bottom:6px;}
 .ledger-stat .num{font-size:18px;font-weight:700;}
 .ledger-stat.highlight{border-color:var(--amber-soft);background:var(--amber-soft);}
 .ledger-stat.highlight .num{color:var(--amber);font-size:21px;}
+.ledger-stat.violet{border-color:var(--violet-soft);background:var(--violet-soft);}
+.ledger-stat.violet .num{color:var(--violet);}
+.ledger-stat.teal{border-color:var(--teal-soft);background:var(--teal-soft);}
+.ledger-stat.teal .num{color:var(--teal);}
 .ledger-export{align-self:flex-start;flex:none;}
 .ledger-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);
   padding-bottom:110px;}
@@ -300,3 +319,19 @@ main.screens{flex:1;}
 .waiting-item .wi-remove{background:var(--rose-soft);color:var(--rose);border:none;border-radius:10px;
   padding:9px 12px;font-weight:700;font-size:12px;cursor:pointer;flex:none;}
 .waiting-empty{font-size:12.5px;color:var(--text-dim);padding:16px 0;text-align:center;}
+
+/* ---------- 재고 관리 (정산 시트) ---------- */
+.stock-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;}
+.stock-panel .panel-title{font-size:13px;font-weight:700;color:var(--text-dim);margin-bottom:10px;}
+.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;}
+.stock-item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:12px;padding:9px 10px;}
+.stock-item.soft{border-color:var(--rose-soft);background:var(--rose-soft);}
+.stock-item.hard{border-color:var(--rose);background:var(--rose-soft);}
+.si-main{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.si-name{font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.si-qty{font-size:11px;color:var(--text-dim);}
+.stock-item.soft .si-qty,.stock-item.hard .si-qty{color:var(--rose);}
+.si-toggle{flex:none;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);
+  border-radius:9px;padding:6px 9px;font-size:10.8px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.si-toggle.on{background:var(--rose);color:#fdf0f2;border-color:var(--rose);}

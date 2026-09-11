@@ -66,6 +66,16 @@
           <span class="cat-name">주류 및 음료</span>
           <span class="cat-hint">소주 · 맥주 · 하이볼 외 6종</span>
         </button>
+        <button class="category-card coupon" data-cat="coupon">
+          <span class="cat-emoji">🎟️</span>
+          <span class="cat-name">쿠폰 서비스</span>
+          <span class="cat-hint">쿠폰으로 무료 제공 · 안주+주류 전체</span>
+        </button>
+        <button class="category-card friend" data-cat="friend">
+          <span class="cat-emoji">🤝</span>
+          <span class="cat-name">친구 서비스</span>
+          <span class="cat-hint">친구에게 무료 제공 · 안주+주류 전체</span>
+        </button>
       </div>
     </section>
 
@@ -98,10 +108,17 @@
       </div>
 
       <div class="ledger-summary">
-        <div class="ledger-stat"><div class="lab">총 주문 건수</div><div id="ledgerCount" class="num mono">0건</div></div>
         <div class="ledger-stat highlight"><div class="lab">총 매출</div><div id="ledgerTotal" class="num mono">₩0</div></div>
+        <div class="ledger-stat"><div class="lab">총 주문 건수</div><div id="ledgerCount" class="num mono">0건</div></div>
         <div class="ledger-stat"><div class="lab">안주 매출</div><div id="ledgerAnju" class="num mono">₩0</div></div>
         <div class="ledger-stat"><div class="lab">주류·음료 매출</div><div id="ledgerDrink" class="num mono">₩0</div></div>
+        <div class="ledger-stat violet"><div class="lab">쿠폰 서비스 (원가)</div><div id="ledgerCoupon" class="num mono">₩0</div></div>
+        <div class="ledger-stat teal"><div class="lab">친구 서비스 (원가)</div><div id="ledgerFriend" class="num mono">₩0</div></div>
+      </div>
+
+      <div class="stock-panel">
+        <div class="panel-title">🍽 재고 관리 — 여기서 품절 처리한 메뉴는 주문 화면에서 완전히 눌리지 않아요</div>
+        <div id="stockGrid" class="stock-grid"></div>
       </div>
 
       <button id="exportExcelBtn" class="btn-primary ledger-export">⬇️ 엑셀 다운로드 (.xlsx)</button>
