@@ -34,6 +34,8 @@ const SERVICE_CATS = {
   friend: { label: "친구 서비스", emoji: "🤝" },
 };
 function isServiceCat(cat) { return cat === "coupon" || cat === "friend"; }
+// 친구 서비스에서는 제외되는 메뉴(원가 부담이 큰 술 종류)
+const FRIEND_SERVICE_EXCLUDE = ["소주", "맥주"];
 
 // 메뉴명 -> 가격 / 카테고리 / 초기 재고 조회용
 const PRICE = {};
@@ -233,20 +235,21 @@ function renderMenu() {
   document.getElementById("menuContext").innerHTML =
     `<span class="context-pill on">${catInfo.emoji} ${catInfo.label}</span><span class="context-pill on">🍽 테이블 ${currentTable}</span>`;
 
-  const items = isService ? ALL_ITEMS : MENU[currentCat].items;
+  let items = isService ? ALL_ITEMS : MENU[currentCat].items;
+  if (currentCat === "friend") items = items.filter((it) => !FRIEND_SERVICE_EXCLUDE.includes(it.name));
   const grid = document.getElementById("menuGrid");
   grid.innerHTML = "";
   items.forEach(({ name, price }) => {
     const remaining = remainingStock(name);
     const hard = isHardSoldOut(name);
     const soft = !hard && remaining <= 0;
+    const lowStock = remaining !== Infinity && remaining <= 10;
 
     const btn = document.createElement("button");
     btn.className = "menu-item" + (hard ? " hard-soldout" : "");
     btn.disabled = hard;
 
     if (isService) {
-      const lowStock = remaining !== Infinity && remaining <= 10;
       btn.innerHTML = `
         <span class="mi-name">${name}</span>
         <span class="mi-price mono"><span class="mi-price-orig">${fmtWon(price)}</span> → <span class="mi-price-free-tag">무료</span></span>
@@ -256,6 +259,7 @@ function renderMenu() {
       btn.innerHTML = `
         <span class="mi-name">${name}</span>
         <span class="mi-price mono">${fmtWon(price)}</span>
+        <span class="mi-stock mono${lowStock ? " low" : ""}">재고 ${fmtStock(remaining)}</span>
         ${(hard || soft) ? `<span class="mi-soldout">품절</span>` : ""}`;
     }
 
