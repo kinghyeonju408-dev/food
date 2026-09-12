@@ -322,23 +322,23 @@ main.screens{flex:1;}
 .waiting-empty{font-size:12.5px;color:var(--text-dim);padding:16px 0;text-align:center;}
 
 /* ---------- 주방 현황판 (지환 전용) ---------- */
-.kitchen-board{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-@media(max-width:640px){.kitchen-board{grid-template-columns:1fr;}}
-.kb-col{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;}
-.kb-col.kb-todo{border-color:var(--amber-soft);}
-.kb-col.kb-done{border-color:var(--mint-soft);}
-.kb-head{font-size:13.5px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
-.kb-todo .kb-head{color:var(--amber-deep);}
-.kb-done .kb-head{color:var(--mint);}
-.kb-count{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:700;background:var(--surface-2);
-  color:var(--text-dim);border-radius:999px;padding:2px 9px;margin-left:auto;}
-.kb-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;}
-.kb-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:10px;
-  padding:10px 12px;font-size:15px;font-weight:800;}
-.kb-item.todo{background:var(--amber-soft);color:var(--amber-deep);}
-.kb-item.done{background:var(--mint-soft);color:var(--mint);opacity:.85;}
-.kb-item .kb-qty{font-family:"IBM Plex Mono",monospace;font-size:16px;font-weight:800;}
-.kb-empty{font-size:12.5px;color:var(--text-dim);text-align:center;padding:14px 0;}
+.kitchen-board{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;}
+.kb-head-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.kb-summary{flex:1;min-width:150px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  border-radius:12px;padding:10px 14px;font-size:13px;font-weight:800;}
+.kb-summary.todo{background:var(--amber-soft);color:var(--amber-deep);}
+.kb-summary.done{background:var(--mint-soft);color:var(--mint);}
+.kb-summary-num{font-family:"IBM Plex Mono",monospace;font-size:17px;font-weight:800;}
+.kb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;}
+.kb-tile{border-radius:14px;border:1px solid var(--border);background:var(--surface-2);padding:10px 8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;min-height:88px;}
+.kb-tile.urgent{border-color:var(--amber);background:var(--amber-soft);}
+.kb-tile-name{font-size:12px;font-weight:800;line-height:1.25;}
+.kb-tile-nums{display:flex;gap:10px;}
+.kb-num{display:flex;align-items:center;gap:3px;font-family:"IBM Plex Mono",monospace;font-weight:800;font-size:13.5px;white-space:nowrap;}
+.kb-num.todo{color:var(--amber-deep);}
+.kb-num.done{color:var(--mint);}
+.kb-empty{grid-column:1/-1;font-size:12.5px;color:var(--text-dim);text-align:center;padding:14px 0;}
 
 /* ---------- 재고 관리 (정산 시트) ---------- */
 .stock-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;}

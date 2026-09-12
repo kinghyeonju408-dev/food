@@ -666,8 +666,9 @@ function renderLedger() {
   const anjuTotal = categoryTotal(MENU.anju.label);
   const drinkTotal = categoryTotal(MENU.drink.label);
   const couponValue = rows.filter((o) => o.service === "coupon").reduce((s, o) => s + Number(o.compValue || 0), 0);
+  const tableCount = new Set(rows.filter((o) => o.type === "order").map((o) => Number(o.tableNum))).size;
 
-  document.getElementById("ledgerCount").textContent = rows.length + "건";
+  document.getElementById("ledgerTableCount").textContent = tableCount + "테이블";
   document.getElementById("ledgerTotal").textContent = fmtWon(totalAmount);
   document.getElementById("ledgerAnju").textContent = fmtWon(anjuTotal);
   document.getElementById("ledgerDrink").textContent = fmtWon(drinkTotal);
@@ -747,23 +748,33 @@ function kitchenAggregates() {
   });
   return { todo, done };
 }
-function renderKitchenList(elId, entries, emptyMsg, cls) {
-  const el = document.getElementById(elId);
-  el.innerHTML = entries.length
-    ? entries.map(([name, qty]) => `<div class="kb-item ${cls}"><span class="kb-name">${name}</span><span class="kb-qty mono">×${qty}</span></div>`).join("")
-    : `<div class="kb-empty">${emptyMsg}</div>`;
-}
 function renderKitchenBoard() {
   if (screen !== "ledger") return;
   const { todo, done } = kitchenAggregates();
-  const todoEntries = Object.entries(todo).sort((a, b) => b[1] - a[1]);
-  const doneEntries = Object.entries(done).sort((a, b) => b[1] - a[1]);
+  const names = [...new Set([...Object.keys(todo), ...Object.keys(done)])];
+  names.sort((a, b) => (todo[b] || 0) - (todo[a] || 0) || (done[b] || 0) - (done[a] || 0));
 
-  document.getElementById("kbTodoCount").textContent = todoEntries.reduce((s, [, q]) => s + q, 0) + "개";
-  document.getElementById("kbDoneCount").textContent = doneEntries.reduce((s, [, q]) => s + q, 0) + "개";
+  const totalTodo = Object.values(todo).reduce((s, n) => s + n, 0);
+  const totalDone = Object.values(done).reduce((s, n) => s + n, 0);
+  document.getElementById("kbTodoCount").textContent = totalTodo + "개";
+  document.getElementById("kbDoneCount").textContent = totalDone + "개";
 
-  renderKitchenList("kbTodoList", todoEntries, "만들 메뉴 없음", "todo");
-  renderKitchenList("kbDoneList", doneEntries, "아직 완료된 메뉴 없음", "done");
+  const grid = document.getElementById("kbGrid");
+  if (names.length === 0) {
+    grid.innerHTML = `<div class="kb-empty">아직 들어온 주문이 없어요</div>`;
+    return;
+  }
+  grid.innerHTML = names.map((name) => {
+    const t = todo[name] || 0;
+    const d = done[name] || 0;
+    return `<div class="kb-tile${t > 0 ? " urgent" : ""}">
+      <div class="kb-tile-name">${name}</div>
+      <div class="kb-tile-nums">
+        <span class="kb-num todo">🔥${t}</span>
+        <span class="kb-num done">✅${d}</span>
+      </div>
+    </div>`;
+  }).join("");
 }
 
 // ---------------- 재고 관리 (정산 시트) ----------------
