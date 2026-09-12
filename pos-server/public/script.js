@@ -589,6 +589,12 @@ function renderTableDetail() {
         chip.className = "item-chip" + (remaining <= 0 ? " refunded" : "");
         const qtyLabel = remaining < it.qty ? `×${remaining} (원래 ×${it.qty})` : `×${it.qty}`;
         chip.innerHTML = `<span>${it.name} ${qtyLabel}</span>`;
+        if (remaining > 0 && it.servedAt) {
+          const doneTag = document.createElement("span");
+          doneTag.className = "served-tag";
+          doneTag.textContent = "🍽 완료";
+          chip.appendChild(doneTag);
+        }
         if (remaining > 0) {
           const rbtn = document.createElement("button");
           rbtn.className = "refund-btn";
@@ -644,13 +650,17 @@ async function settleTable(n) {
 function allOrdersSorted() {
   return ordersCache.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
 }
-// 3단계 상태: pending(주문 확인 보류중) -> confirmed(주문 확인 완료) -> served(음식 나옴)
+// 상태: pending(주문 확인 보류중) -> confirmed(주문 확인 완료) -> partial(일부 메뉴 완료) -> served(전체 완료)
+// 음식 준비 완료는 메뉴(아이템)별로 따로 체크해요 — 한 주문에 여러 메뉴가 있으면 순서대로 하나씩 나오기 때문.
 function orderStage(o) {
-  if (o.servedAt) return "served";
+  const items = o.items || [];
+  const doneCount = items.filter((it) => it.servedAt).length;
+  if (items.length > 0 && doneCount === items.length) return "served";
+  if (doneCount > 0) return "partial";
   if (o.confirmedAt) return "confirmed";
   return "pending";
 }
-const STAGE_LABEL = { pending: "확인 보류중", confirmed: "확인 완료", served: "음식 나옴" };
+const STAGE_LABEL = { pending: "확인 보류중", confirmed: "확인 완료", partial: "일부 완료", served: "음식 나옴" };
 
 function renderLedger() {
   if (screen !== "ledger") return;
@@ -706,15 +716,24 @@ function renderLedger() {
     tr.appendChild(confirmTd);
 
     const servedTd = document.createElement("td");
-    servedTd.className = "stage-cell";
+    servedTd.className = "stage-cell items-stage";
     if (isRefund) {
       servedTd.innerHTML = `<span class="served-na">-</span>`;
     } else {
-      const sbtn = document.createElement("button");
-      sbtn.className = "stage-btn served" + (o.servedAt ? " on" : "");
-      sbtn.textContent = o.servedAt ? `🍽 음식나옴 · ${fmtTime(o.servedAt)}` : "음식 준비 완료";
-      sbtn.addEventListener("click", () => toggleServed(o.id, !o.servedAt));
-      servedTd.appendChild(sbtn);
+      (o.items || []).forEach((it, idx) => {
+        const row = document.createElement("div");
+        row.className = "item-stage-row";
+        const label = document.createElement("span");
+        label.className = "isr-name";
+        label.textContent = `${it.name} ×${it.qty}`;
+        row.appendChild(label);
+        const sbtn = document.createElement("button");
+        sbtn.className = "stage-btn served" + (it.servedAt ? " on" : "");
+        sbtn.textContent = it.servedAt ? `🍽 ${fmtTime(it.servedAt)}` : "준비 완료";
+        sbtn.addEventListener("click", () => toggleItemServed(o.id, idx, !it.servedAt));
+        row.appendChild(sbtn);
+        servedTd.appendChild(row);
+      });
     }
     tr.appendChild(servedTd);
 
@@ -739,7 +758,7 @@ function kitchenAggregates() {
       const refunded = refundedQtyFor(o.id, it.name);
       const remaining = Math.max(0, Number(it.qty || 0) - refunded);
       if (remaining <= 0) return;
-      const bucket = o.servedAt ? done : todo;
+      const bucket = it.servedAt ? done : todo;
       bucket[it.name] = (bucket[it.name] || 0) + remaining;
     });
   });
@@ -822,12 +841,14 @@ async function toggleConfirmed(orderId, checked) {
   }
 }
 
-async function toggleServed(orderId, checked) {
+async function toggleItemServed(orderId, itemIndex, checked) {
+  const order = ordersCache.find((x) => x.id === orderId);
+  if (!order) return;
   const servedAt = checked ? new Date().toISOString() : null;
+  const items = (order.items || []).map((it, i) => (i === itemIndex ? { ...it, servedAt } : it));
   try {
-    await apiSend("PATCH", "/orders/" + orderId, { servedAt });
-    const o = ordersCache.find((x) => x.id === orderId);
-    if (o) o.servedAt = servedAt;
+    await apiSend("PATCH", "/orders/" + orderId, { items });
+    order.items = items;
     refreshDataScreens();
   } catch (e) {
     console.error("나감 처리 실패", e);
@@ -841,13 +862,14 @@ async function exportExcel() {
   const rows = allOrdersSorted();
   const totalAmount = rows.reduce((s, o) => s + orderAmount(o), 0);
 
-  const aoa = [["상태", "확인시간", "나간시간", "시간", "테이블", "구분", "주문 내역", "금액"]];
+  const aoa = [["상태", "확인시간", "메뉴별 준비상태", "시간", "테이블", "구분", "주문 내역", "금액"]];
   rows.forEach((o) => {
     const isRefund = o.type === "refund";
+    const itemStatusStr = (o.items || []).map((it) => `${it.name}:${it.servedAt ? fmtTime(it.servedAt) : "대기"}`).join(", ");
     aoa.push([
       isRefund ? "-" : STAGE_LABEL[orderStage(o)],
       o.confirmedAt ? fmtDateTime(o.confirmedAt) : "",
-      o.servedAt ? fmtDateTime(o.servedAt) : "",
+      isRefund ? "" : itemStatusStr,
       fmtDateTime(o.createdAt),
       `테이블 ${o.tableNum}`,
       (o.category || "") + (isRefund ? " (환불)" : ""),
