@@ -585,14 +585,15 @@ function renderTableDetail() {
       (o.items || []).forEach((it) => {
         const refunded = refundedQtyFor(o.id, it.name);
         const remaining = Math.max(0, Number(it.qty || 0) - refunded);
+        const isServed = remaining > 0 && !!it.servedAt;
         const chip = document.createElement("span");
-        chip.className = "item-chip" + (remaining <= 0 ? " refunded" : "");
+        chip.className = "item-chip" + (remaining <= 0 ? " refunded" : isServed ? " served" : "");
         const qtyLabel = remaining < it.qty ? `×${remaining} (원래 ×${it.qty})` : `×${it.qty}`;
-        chip.innerHTML = `<span>${it.name} ${qtyLabel}</span>`;
-        if (remaining > 0 && it.servedAt) {
+        chip.innerHTML = `<span>${isServed ? "✅ " : ""}${it.name} ${qtyLabel}</span>`;
+        if (isServed) {
           const doneTag = document.createElement("span");
           doneTag.className = "served-tag";
-          doneTag.textContent = "🍽 완료";
+          doneTag.textContent = `완료 · ${fmtTime(it.servedAt)}`;
           chip.appendChild(doneTag);
         }
         if (remaining > 0) {
