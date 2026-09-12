@@ -748,7 +748,7 @@ function kitchenAggregates() {
 function renderKitchenBoard() {
   if (screen !== "ledger") return;
   const { todo, done } = kitchenAggregates();
-  const names = KITCHEN_ORDER.filter((name) => (todo[name] || 0) > 0 || (done[name] || 0) > 0);
+  const names = KITCHEN_ORDER;
 
   const totalTodo = Object.values(todo).reduce((s, n) => s + n, 0);
   const totalDone = Object.values(done).reduce((s, n) => s + n, 0);
@@ -756,10 +756,6 @@ function renderKitchenBoard() {
   document.getElementById("kbDoneCount").textContent = totalDone + "개";
 
   const grid = document.getElementById("kbGrid");
-  if (names.length === 0) {
-    grid.innerHTML = `<div class="kb-empty">아직 들어온 주문이 없어요</div>`;
-    return;
-  }
   grid.innerHTML = names.map((name) => {
     const t = todo[name] || 0;
     const d = done[name] || 0;
