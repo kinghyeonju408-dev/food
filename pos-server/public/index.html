@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>일일호프 POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <button id="backBtn" class="icon-btn" hidden aria-label="뒤로">←</button>
+    <button id="waitingBtn" class="nav-btn secondary waiting-btn">🕒 웨이팅<span id="waitingBadge" class="waiting-badge" hidden>0</span></button>
+    <div class="brand">🍺 일일호프 POS</div>
+    <span id="syncDot" class="sync-dot" title="연결 확인 중..."></span>
+    <div class="nav-group">
+      <button id="navRecordsBtn" class="nav-btn secondary">📋 테이블별 주문</button>
+      <button id="navLedgerBtn" class="nav-btn">🧾 정산 시트</button>
+    </div>
+  </header>
+
+  <main class="screens">
+
+    <!-- 홈: 테이블 선택 -->
+    <section id="screen-home" class="screen">
+      <div class="home-hero">
+        <div class="home-eyebrow">일일호프 · 주문 접수</div>
+        <div class="home-title">테이블을 먼저 선택해주세요</div>
+      </div>
+      <div class="section-label">1층 <span class="badge">1~10</span></div>
+      <div id="tableGrid1F" class="table-grid"></div>
+      <div class="section-label">지하 1층 <span class="badge">11~22</span></div>
+      <div id="tableGridB1" class="table-grid"></div>
+    </section>
+
+    <!-- 웨이팅 -->
+    <section id="screen-waiting" class="screen" hidden>
+      <div class="context-bar">
+        <span class="context-pill on">🕒 웨이팅 등록</span>
+        <span class="context-pill">대표자 정보를 입력하고 등록해주세요</span>
+      </div>
+      <div class="waiting-form">
+        <input id="waitName" type="text" placeholder="대표자 이름" />
+        <input id="waitSize" type="number" min="1" value="2" placeholder="인원수" />
+        <input id="waitPhone" type="tel" placeholder="연락처 (010-0000-0000)" />
+        <button id="waitAddBtn" class="btn-primary">웨이팅 등록</button>
+      </div>
+      <div class="section-label">대기 명단 <span class="badge" id="waitingCountBadge">0팀</span></div>
+      <div id="waitingList" class="waiting-list"></div>
+    </section>
+
+    <!-- 카테고리 선택 -->
+    <section id="screen-category" class="screen" hidden>
+      <div id="categoryContext" class="context-bar"></div>
+      <div class="category-grid">
+        <button class="category-card anju" data-cat="anju">
+          <span class="cat-emoji">🍢</span>
+          <span class="cat-name">안주</span>
+          <span class="cat-hint">짜파게티 감바스 · 신라면 볶음밥 외 6종</span>
+        </button>
+        <button class="category-card drink" data-cat="drink">
+          <span class="cat-emoji">🍻</span>
+          <span class="cat-name">주류 및 음료</span>
+          <span class="cat-hint">소주 · 맥주 · 하이볼 외 6종</span>
+        </button>
+        <button class="category-card coupon" data-cat="coupon">
+          <span class="cat-emoji">🎟️</span>
+          <span class="cat-name">쿠폰 서비스</span>
+          <span class="cat-hint">쿠폰으로 무료 제공 · 안주+주류 전체</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 메뉴 & 장바구니 -->
+    <section id="screen-menu" class="screen" hidden>
+      <div id="menuContext" class="context-bar"></div>
+      <div id="menuGrid" class="menu-grid"></div>
+    </section>
+
+    <!-- 테이블별 주문 기록 -->
+    <section id="screen-records" class="screen" hidden>
+      <div class="context-bar">
+        <span class="context-pill on">📋 테이블별 주문</span>
+        <span class="context-pill">테이블을 눌러 전체 내역 · 환불 · 계산 완료를 처리하세요</span>
+      </div>
+      <div class="section-label">1층 <span class="badge">1~10</span></div>
+      <div id="recordGrid1F" class="record-grid"></div>
+      <div class="section-label">지하 1층 <span class="badge">11~22</span></div>
+      <div id="recordGridB1" class="record-grid"></div>
+      <div class="reset-row">
+        <button id="resetLink" class="reset-link">🧹 전체 주문 기록 초기화 (행사 시작 전 테스트 데이터 삭제용)</button>
+      </div>
+    </section>
+
+    <!-- 정산 시트 (회계용) -->
+    <section id="screen-ledger" class="screen" hidden>
+      <div class="context-bar">
+        <span class="context-pill on">🧾 정산 시트</span>
+        <span class="context-pill">시간순 주문 내역과 총 매출이에요</span>
+      </div>
+
+      <div class="ledger-summary">
+        <div class="ledger-stat highlight"><div class="lab">총 매출</div><div id="ledgerTotal" class="num mono">₩0</div></div>
+        <div class="ledger-stat"><div class="lab">총 주문 건수</div><div id="ledgerCount" class="num mono">0건</div></div>
+        <div class="ledger-stat"><div class="lab">안주 매출</div><div id="ledgerAnju" class="num mono">₩0</div></div>
+        <div class="ledger-stat"><div class="lab">주류·음료 매출</div><div id="ledgerDrink" class="num mono">₩0</div></div>
+        <div class="ledger-stat violet"><div class="lab">쿠폰 서비스 (원가)</div><div id="ledgerCoupon" class="num mono">₩0</div></div>
+      </div>
+
+      <button id="exportExcelBtn" class="btn-primary ledger-export">⬇️ 엑셀 다운로드 (.xlsx)</button>
+
+      <div class="ledger-table-wrap">
+        <table class="ledger-table">
+          <thead>
+            <tr><th>상태</th><th>주문 확인</th><th>음식 나옴</th><th>시간</th><th>테이블</th><th>구분</th><th>주문 내역</th><th>금액</th></tr>
+          </thead>
+          <tbody id="ledgerBody"></tbody>
+        </table>
+      </div>
+
+      <div class="stock-panel">
+        <div class="panel-title">🍽 재고 관리 — 여기서 품절 처리한 메뉴는 주문 화면에서 완전히 눌리지 않아요</div>
+        <div id="stockGrid" class="stock-grid"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 장바구니 바 -->
+  <div id="cartBar" class="cart-bar" hidden>
+    <div class="cart-inner">
+      <div id="cartChips" class="cart-chips"></div>
+      <div class="cart-actions">
+        <button id="cartClearBtn" class="btn-ghost">비우기</button>
+        <button id="cartConfirmBtn" class="btn-primary">주문 확정하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 수량 선택 모달 -->
+  <div id="qtyModal" class="modal-overlay" hidden>
+    <div class="qty-card">
+      <div id="qtyName" class="qty-name">메뉴명</div>
+      <div class="qty-stepper">
+        <button id="qtyMinus" class="qty-btn" aria-label="수량 감소">−</button>
+        <div id="qtyNum" class="qty-num mono">1</div>
+        <button id="qtyPlus" class="qty-btn" aria-label="수량 증가">+</button>
+      </div>
+      <div id="qtySubtotal" class="qty-subtotal mono">0원 × 1 = 0원</div>
+      <div class="qty-actions">
+        <button id="qtyCancelBtn" class="btn-ghost">취소</button>
+        <button id="qtyAddBtn" class="btn-primary">장바구니 담기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 테이블 상세 시트 -->
+  <div id="tableDetailModal" class="modal-overlay" hidden>
+    <div class="detail-card">
+      <div class="detail-head">
+        <span id="detailTitle" class="detail-title">테이블</span>
+        <button id="detailCloseBtn" class="icon-btn" aria-label="닫기">✕</button>
+      </div>
+      <div id="detailBody" class="detail-body"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
