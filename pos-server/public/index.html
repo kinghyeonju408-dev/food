@@ -112,6 +112,17 @@
 
       <button id="exportExcelBtn" class="btn-primary ledger-export">⬇️ 엑셀 다운로드 (.xlsx)</button>
 
+      <div class="kitchen-board">
+        <div class="kb-col kb-todo">
+          <div class="kb-head">🔥 만들어야 할 메뉴 <span id="kbTodoCount" class="kb-count">0개</span></div>
+          <div id="kbTodoList" class="kb-list"></div>
+        </div>
+        <div class="kb-col kb-done">
+          <div class="kb-head">✅ 완료된 메뉴 <span id="kbDoneCount" class="kb-count">0개</span></div>
+          <div id="kbDoneList" class="kb-list"></div>
+        </div>
+      </div>
+
       <div class="ledger-table-wrap">
         <table class="ledger-table">
           <thead>

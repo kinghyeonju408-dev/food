@@ -159,6 +159,7 @@ function loadLocalData() {
 function refreshDataScreens() {
   renderRecords();
   renderLedger();
+  renderKitchenBoard();
   renderStockPanel();
   renderWaitingList();
   updateWaitingBadge();
@@ -194,7 +195,7 @@ function showHome() { currentCat = null; currentTable = null; cart = {}; cartSer
 function selectTable(n) { currentTable = n; currentCat = null; setScreen("category"); renderCategoryScreen(); }
 function showMenu(cat) { currentCat = cat; setScreen("menu"); renderMenu(); }
 function showRecords() { setScreen("records"); renderRecords(); }
-function showLedger() { setScreen("ledger"); renderLedger(); renderStockPanel(); }
+function showLedger() { setScreen("ledger"); renderLedger(); renderKitchenBoard(); renderStockPanel(); }
 function showWaiting() { setScreen("waiting"); renderWaitingList(); }
 
 function onBack() {
@@ -728,6 +729,41 @@ function renderLedger() {
       <td class="mono amt">${fmtWon(orderAmount(o))}</td>`);
     body.appendChild(tr);
   });
+}
+
+// ---------------- 주방 현황판 (지환용 — 만들어야 할 메뉴 / 완료된 메뉴 한눈에 보기) ----------------
+function kitchenAggregates() {
+  const todo = {};
+  const done = {};
+  ordersCache.forEach((o) => {
+    if (o.type !== "order") return;
+    (o.items || []).forEach((it) => {
+      const refunded = refundedQtyFor(o.id, it.name);
+      const remaining = Math.max(0, Number(it.qty || 0) - refunded);
+      if (remaining <= 0) return;
+      const bucket = o.servedAt ? done : todo;
+      bucket[it.name] = (bucket[it.name] || 0) + remaining;
+    });
+  });
+  return { todo, done };
+}
+function renderKitchenList(elId, entries, emptyMsg, cls) {
+  const el = document.getElementById(elId);
+  el.innerHTML = entries.length
+    ? entries.map(([name, qty]) => `<div class="kb-item ${cls}"><span class="kb-name">${name}</span><span class="kb-qty mono">×${qty}</span></div>`).join("")
+    : `<div class="kb-empty">${emptyMsg}</div>`;
+}
+function renderKitchenBoard() {
+  if (screen !== "ledger") return;
+  const { todo, done } = kitchenAggregates();
+  const todoEntries = Object.entries(todo).sort((a, b) => b[1] - a[1]);
+  const doneEntries = Object.entries(done).sort((a, b) => b[1] - a[1]);
+
+  document.getElementById("kbTodoCount").textContent = todoEntries.reduce((s, [, q]) => s + q, 0) + "개";
+  document.getElementById("kbDoneCount").textContent = doneEntries.reduce((s, [, q]) => s + q, 0) + "개";
+
+  renderKitchenList("kbTodoList", todoEntries, "만들 메뉴 없음", "todo");
+  renderKitchenList("kbDoneList", doneEntries, "아직 완료된 메뉴 없음", "done");
 }
 
 // ---------------- 재고 관리 (정산 시트) ----------------
