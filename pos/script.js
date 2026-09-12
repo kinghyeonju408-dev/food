@@ -34,6 +34,10 @@ const SERVICE_CATS = {
 };
 function isServiceCat(cat) { return cat === "coupon"; }
 
+// 주방 현황판: 주방에서 직접 만들 필요 없는 메뉴는 제외, 안주 먼저 → 주류 순서로 고정 정렬
+const KITCHEN_EXCLUDED = new Set(["소주", "맥주", "콜라", "제로콜라", "사이다"]);
+const KITCHEN_ORDER = ALL_ITEMS.map((it) => it.name).filter((name) => !KITCHEN_EXCLUDED.has(name));
+
 // 메뉴명 -> 가격 / 카테고리 / 초기 재고 조회용
 const PRICE = {};
 const ITEM_CAT = {};
@@ -739,6 +743,7 @@ function kitchenAggregates() {
   ordersCache.forEach((o) => {
     if (o.type !== "order") return;
     (o.items || []).forEach((it) => {
+      if (KITCHEN_EXCLUDED.has(it.name)) return;
       const refunded = refundedQtyFor(o.id, it.name);
       const remaining = Math.max(0, Number(it.qty || 0) - refunded);
       if (remaining <= 0) return;
@@ -751,8 +756,7 @@ function kitchenAggregates() {
 function renderKitchenBoard() {
   if (screen !== "ledger") return;
   const { todo, done } = kitchenAggregates();
-  const names = [...new Set([...Object.keys(todo), ...Object.keys(done)])];
-  names.sort((a, b) => (todo[b] || 0) - (todo[a] || 0) || (done[b] || 0) - (done[a] || 0));
+  const names = KITCHEN_ORDER.filter((name) => (todo[name] || 0) > 0 || (done[name] || 0) > 0);
 
   const totalTodo = Object.values(todo).reduce((s, n) => s + n, 0);
   const totalDone = Object.values(done).reduce((s, n) => s + n, 0);
