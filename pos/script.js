@@ -556,7 +556,7 @@ function renderTableDetail() {
         const settleInfo = (tstate.settlements || []).find((s) => s.batch === lastBatch);
         const div = document.createElement("div");
         div.className = "settle-divider";
-        div.innerHTML = `<span class="line"></span><span class="tag">💳 계산 완료${settleInfo ? " · " + fmtTime(settleInfo.settledAt) : ""}</span><span class="line"></span>`;
+        div.innerHTML = `<span class="line"></span><span class="tag">🧹 테이블 비움${settleInfo ? " · " + fmtTime(settleInfo.settledAt) : ""}</span><span class="line"></span>`;
         body.appendChild(div);
       }
       lastBatch = o.batch;
@@ -622,7 +622,7 @@ function renderTableDetail() {
   const hasOpen = myOrders.some((o) => o.batch === openBatch && o.type !== "refund");
   const settleBtn = document.createElement("button");
   settleBtn.className = "settle-btn";
-  settleBtn.textContent = hasOpen ? "💳 계산 완료 처리" : "정산할 주문 없음";
+  settleBtn.textContent = hasOpen ? "🧹 테이블 비우기" : "정산할 주문 없음";
   settleBtn.disabled = !hasOpen;
   settleBtn.addEventListener("click", () => settleTable(n));
   body.appendChild(settleBtn);
@@ -647,9 +647,9 @@ async function settleTable(n) {
       saveLocalData();
       refreshDataScreens();
     }
-    showToast(`테이블 ${n}번 계산 완료 처리했어요.`);
+    showToast(`테이블 ${n}번을 비웠어요.`);
   } catch (e) {
-    console.error("계산 완료 처리 실패", e);
+    console.error("테이블 비우기 실패", e);
     showToast("처리에 실패했어요. 다시 시도해주세요.");
   }
 }
