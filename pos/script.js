@@ -21,9 +21,9 @@ const MENU = {
       { name: "봉알주",         price: 4500, stock: 30 },
       { name: "요쏘",           price: 4500, stock: 30 },
       { name: "황도소다 하이볼", price: 5000, stock: 30 },
-      { name: "콜라",           price: 2000, stock: Infinity },
-      { name: "제로콜라",       price: 2000, stock: Infinity },
-      { name: "사이다",         price: 2000, stock: Infinity },
+      { name: "콜라",           price: 3000, stock: Infinity },
+      { name: "제로콜라",       price: 3000, stock: Infinity },
+      { name: "사이다",         price: 3000, stock: Infinity },
     ] },
 };
 
