@@ -98,8 +98,6 @@ main.screens{flex:1;}
 .category-card.drink:active,.category-card.drink:hover{border-color:var(--mint);}
 .category-card.coupon{border-color:#ddd0f0;}
 .category-card.coupon:active,.category-card.coupon:hover{border-color:var(--violet);}
-.category-card.friend{border-color:#bfe6e3;}
-.category-card.friend:active,.category-card.friend:hover{border-color:var(--teal);}
 .cat-emoji{font-size:46px;}
 .cat-name{font-family:"Black Han Sans",sans-serif;font-size:22px;}
 .cat-hint{font-size:12px;color:var(--text-dim);}
@@ -237,7 +235,6 @@ main.screens{flex:1;}
 .service-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;display:inline-block;}
 .service-badge.paid{background:var(--amber-soft);color:var(--amber-deep);}
 .service-badge.coupon{background:var(--violet-soft);color:var(--violet);}
-.service-badge.friend{background:var(--teal-soft);color:var(--teal);}
 .oe-items{display:flex;flex-wrap:wrap;gap:6px;}
 .item-chip{display:flex;align-items:center;gap:6px;background:var(--surface-3);border-radius:999px;
   padding:5px 6px 5px 12px;font-size:11.8px;font-weight:600;}
@@ -274,8 +271,6 @@ main.screens{flex:1;}
 .ledger-stat.highlight .num{color:var(--amber);font-size:21px;}
 .ledger-stat.violet{border-color:var(--violet-soft);background:var(--violet-soft);}
 .ledger-stat.violet .num{color:var(--violet);}
-.ledger-stat.teal{border-color:var(--teal-soft);background:var(--teal-soft);}
-.ledger-stat.teal .num{color:var(--teal);}
 .ledger-export{align-self:flex-start;flex:none;}
 .ledger-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);
   padding-bottom:110px;}

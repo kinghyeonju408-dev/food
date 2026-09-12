@@ -27,15 +27,12 @@ const MENU = {
     ] },
 };
 
-// 테이블 선택 후 나오는 "쿠폰 서비스"/"친구 서비스"는 안주+주류를 합친 목록에서 고름
+// 테이블 선택 후 나오는 "쿠폰 서비스"는 안주+주류를 합친 목록에서 고름
 const ALL_ITEMS = [...MENU.anju.items, ...MENU.drink.items];
 const SERVICE_CATS = {
   coupon: { label: "쿠폰 서비스", emoji: "🎟️" },
-  friend: { label: "친구 서비스", emoji: "🤝" },
 };
-function isServiceCat(cat) { return cat === "coupon" || cat === "friend"; }
-// 친구 서비스에서는 제외되는 메뉴(원가 부담이 큰 술 종류)
-const FRIEND_SERVICE_EXCLUDE = ["소주", "맥주"];
+function isServiceCat(cat) { return cat === "coupon"; }
 
 // 메뉴명 -> 가격 / 카테고리 / 초기 재고 조회용
 const PRICE = {};
@@ -55,7 +52,7 @@ let screen = "home";
 let currentCat = null;
 let currentTable = null;
 let cart = {};              // { 메뉴명: 수량 }
-let cartService = {};       // { 메뉴명: null|"coupon"|"friend" } — 담을 당시 어떤 카테고리였는지(유료/서비스 구분)
+let cartService = {};       // { 메뉴명: null|"coupon" } — 담을 당시 어떤 카테고리였는지(유료/서비스 구분)
 
 let modalMode = "add";      // "add" | "refund"
 let modalItem = null;       // add 모드에서 선택한 메뉴명
@@ -235,8 +232,7 @@ function renderMenu() {
   document.getElementById("menuContext").innerHTML =
     `<span class="context-pill on">${catInfo.emoji} ${catInfo.label}</span><span class="context-pill on">🍽 테이블 ${currentTable}</span>`;
 
-  let items = isService ? ALL_ITEMS : MENU[currentCat].items;
-  if (currentCat === "friend") items = items.filter((it) => !FRIEND_SERVICE_EXCLUDE.includes(it.name));
+  const items = isService ? ALL_ITEMS : MENU[currentCat].items;
   const grid = document.getElementById("menuGrid");
   grid.innerHTML = "";
   items.forEach(({ name, price }) => {
@@ -378,8 +374,8 @@ async function submitOrder() {
   const batch = (tablesCache[String(currentTable)] && tablesCache[String(currentTable)].currentBatch) || 1;
   const now = new Date().toISOString();
 
-  // 담을 당시 태그(cartService)에 따라 유료/쿠폰 서비스/친구 서비스로 나눠서 각각 별도 주문으로 전송
-  const groups = { paid: [], coupon: [], friend: [] };
+  // 담을 당시 태그(cartService)에 따라 유료/쿠폰 서비스로 나눠서 각각 별도 주문으로 전송
+  const groups = { paid: [], coupon: [] };
   names.forEach((name) => {
     const svc = cartService[name] || "paid";
     groups[svc].push({ name, qty: cart[name] });
@@ -400,7 +396,7 @@ async function submitOrder() {
       batch,
     });
   }
-  ["coupon", "friend"].forEach((svc) => {
+  ["coupon"].forEach((svc) => {
     if (groups[svc].length === 0) return;
     const items = groups[svc].map(({ name, qty }) => ({ name, qty, price: 0, cat: ITEM_CAT[name] }));
     orders.push({
@@ -669,14 +665,12 @@ function renderLedger() {
   const anjuTotal = categoryTotal(MENU.anju.label);
   const drinkTotal = categoryTotal(MENU.drink.label);
   const couponValue = rows.filter((o) => o.service === "coupon").reduce((s, o) => s + Number(o.compValue || 0), 0);
-  const friendValue = rows.filter((o) => o.service === "friend").reduce((s, o) => s + Number(o.compValue || 0), 0);
 
   document.getElementById("ledgerCount").textContent = rows.length + "건";
   document.getElementById("ledgerTotal").textContent = fmtWon(totalAmount);
   document.getElementById("ledgerAnju").textContent = fmtWon(anjuTotal);
   document.getElementById("ledgerDrink").textContent = fmtWon(drinkTotal);
   document.getElementById("ledgerCoupon").textContent = fmtWon(couponValue);
-  document.getElementById("ledgerFriend").textContent = fmtWon(friendValue);
 
   const body = document.getElementById("ledgerBody");
   body.innerHTML = "";
