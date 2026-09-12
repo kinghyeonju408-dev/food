@@ -1,0 +1,16 @@
+{
+  "name": "ilhof-pos-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "일일호프 POS - AWS Elastic Beanstalk용 자체 호스팅 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
