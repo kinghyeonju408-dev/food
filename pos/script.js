@@ -48,6 +48,10 @@ Object.values(MENU).forEach((cat) => cat.items.forEach((it) => {
 
 const TABLE_COUNT = 22;
 const FIRST_FLOOR_MAX = 10; // 1~10: 1층, 11~22: 지하1층
+const TABLE_CAPACITY = {
+  1: 4, 2: 4, 3: 4, 4: 4, 5: 4, 6: 4, 7: 4, 8: 4, 9: 4, 10: 4,
+  11: 2, 12: 6, 13: 6, 14: 8, 15: 4, 16: 4, 17: 8, 18: 8, 19: 4, 20: 4, 21: 4, 22: 8,
+};
 const inClaudeViewer = !!(window.claude && typeof window.claude.use === "function");
 let downloadsApi = null;
 
@@ -217,7 +221,7 @@ function renderHomeTables() {
   for (let n = 1; n <= TABLE_COUNT; n++) {
     const btn = document.createElement("button");
     btn.className = "table-btn";
-    btn.innerHTML = `${n}<span class="lab">테이블</span>`;
+    btn.innerHTML = `${n}<span class="lab">테이블 · ${TABLE_CAPACITY[n]}인</span>`;
     btn.addEventListener("click", () => selectTable(n));
     (n <= FIRST_FLOOR_MAX ? g1 : g2).appendChild(btn);
   }
@@ -511,13 +515,13 @@ function renderRecords() {
       const recentStr = lastItems.length > 1 ? `${lastItems[0]} 외 ${lastItems.length - 1}건` : (lastItems[0] || "-");
       if (elapsedMinutes(openTakenOrders[0].createdAt) >= OVERTIME_MINUTES) tile.classList.add("overtime");
       tile.innerHTML = `
-        <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor}</span></div>
+        <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor} · ${TABLE_CAPACITY[n]}인</span></div>
         <div class="rt-recent">${recentStr}</div>
         <div class="rt-elapsed">⏱ 첫 주문 후 ${fmtElapsed(openTakenOrders[0].createdAt)}</div>
         <div class="rt-amount">${fmtWon(currentAmount)}</div>`;
     } else {
       tile.innerHTML = `
-        <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor}</span></div>
+        <div class="rt-top"><span class="rt-num">${n}</span><span class="rt-floor">${floor} · ${TABLE_CAPACITY[n]}인</span></div>
         <div class="rt-empty">주문 대기중</div>`;
     }
     tile.addEventListener("click", () => openTableDetail(n));
@@ -539,7 +543,7 @@ function renderTableDetail() {
   const n = openDetailTable;
   if (!n) return;
   const floor = n <= FIRST_FLOOR_MAX ? "1층" : "지하 1층";
-  document.getElementById("detailTitle").textContent = `테이블 ${n} · ${floor}`;
+  document.getElementById("detailTitle").textContent = `테이블 ${n} · ${floor} · ${TABLE_CAPACITY[n]}인`;
 
   const tstate = tablesCache[String(n)] || { currentBatch: 1, settlements: [] };
   const myOrders = ordersForTable(n).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
