@@ -669,7 +669,7 @@ const STAGE_LABEL = { pending: "확인 보류중", confirmed: "확인 완료", p
 
 function renderLedger() {
   if (screen !== "ledger") return;
-  const rows = allOrdersSorted();
+  const rows = allOrdersSorted().slice().reverse(); // 최신 주문이 맨 위로
   const totalAmount = rows.reduce((s, o) => s + orderAmount(o), 0);
   const categoryTotal = (label) => rows.reduce((s, o) => s + (o.items || [])
     .filter((it) => (it.cat || ITEM_CAT[it.name]) === label)
