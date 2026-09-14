@@ -903,9 +903,22 @@ async function exportExcel() {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+let confirmResolve = null;
+function showConfirm(message) {
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    document.getElementById("confirmText").textContent = message;
+    document.getElementById("confirmModal").hidden = false;
+  });
+}
+function closeConfirm(result) {
+  document.getElementById("confirmModal").hidden = true;
+  if (confirmResolve) { confirmResolve(result); confirmResolve = null; }
+}
+
 async function resetAll() {
-  if (!confirm("정말 모든 주문 기록을 초기화할까요? 되돌릴 수 없어요.")) return;
-  if (!confirm("한 번 더 확인할게요. 전체 주문 데이터를 삭제합니다. 진행할까요?")) return;
+  if (!(await showConfirm("정말 모든 주문 기록을 초기화할까요? 되돌릴 수 없어요."))) return;
+  if (!(await showConfirm("한 번 더 확인할게요. 전체 주문 데이터를 삭제합니다. 진행할까요?"))) return;
   try {
     await apiSend("POST", "/reset");
     ordersCache = [];
@@ -1019,6 +1032,11 @@ function wireStaticUI() {
   document.getElementById("cartConfirmBtn").addEventListener("click", submitOrder);
   document.getElementById("cartClearBtn").addEventListener("click", clearCart);
   document.getElementById("resetLink").addEventListener("click", resetAll);
+  document.getElementById("confirmCancelBtn").addEventListener("click", () => closeConfirm(false));
+  document.getElementById("confirmOkBtn").addEventListener("click", () => closeConfirm(true));
+  document.getElementById("confirmModal").addEventListener("click", (e) => {
+    if (e.target.id === "confirmModal") closeConfirm(false);
+  });
 }
 
 const POLL_INTERVAL_MS = 3000;
