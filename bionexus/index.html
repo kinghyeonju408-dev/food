@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>바이오넥서스 — 식물 소리 연구 앱</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="eyebrow">BIONEXUS · 2026 학술제</div>
+    <h1>목마른 토마토는 소리를 낼까</h1>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="화면 선택">
+    <button data-tab="roadmap">로드맵</button>
+    <button data-tab="log">실험 기록</button>
+    <button data-tab="analyze">초음파 분석</button>
+    <button data-tab="stats">통계</button>
+    <button data-tab="listen">소리 체험</button>
+    <button data-tab="quiz">청취 퀴즈</button>
+    <button data-tab="touch">떨림·반응시간</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- 로드맵 -->
+<section id="tab-roadmap" class="tab">
+  <div class="intro">
+    <h2>10/25 완료 로드맵 <small>제출 마감 10/28(수)</small></h2>
+    <p>체크하면 이 기기에 저장됩니다. 마일스톤(◆)을 넘기지 못하면 아래 플랜 B를 따릅니다.</p>
+    <div class="progress"><div id="roadmapBar"></div></div>
+    <p class="muted" id="roadmapStat"></p>
+  </div>
+  <div id="roadmapList"></div>
+  <div class="card warn">
+    <h3>10/6 판정에서 막히면 — 플랜 B</h3>
+    <ul>
+      <li><b>장비가 안 왔다</b> → 모델 학습·보조 연구(떨림·반응시간)를 앞당기고, 도착 즉시 가뭄 실험 시작. 10/10 시작이 마지노선.</li>
+      <li><b>양성 대조가 안 잡힌다</b> → 샘플링 레이트·마이크 방향 하루 점검. 그래도 안 되면 떨림·반응시간 검증을 핵심 연구로 올린다.</li>
+      <li><b>식물 소리가 안 잡힌다(10/15)</b> → 실패가 아니라 “이 장비·환경에서의 검출 한계” 결과로 보고서를 쓴다.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 실험 기록 -->
+<section id="tab-log" class="tab">
+  <div class="intro">
+    <h2>화분 무게 기록</h2>
+    <p>매일 같은 시각에 잽니다. 무게 감소가 곧 수분 손실 지표입니다. <b>하루 한 번 CSV로 내보내 공유 드라이브에 보관하세요.</b></p>
+  </div>
+  <div class="card">
+    <h3>화분 목록</h3>
+    <div class="row">
+      <label>화분 ID <input id="potId" placeholder="예: T1" size="6"></label>
+      <label>그룹
+        <select id="potGroup">
+          <option value="drought">가뭄</option>
+          <option value="control">대조</option>
+          <option value="soil">흙만(잡음 대조)</option>
+        </select>
+      </label>
+      <button id="potAdd">추가</button>
+      <button id="potDefault" class="ghost">기본 14개 만들기 (가뭄 6·대조 6·흙 2)</button>
+    </div>
+    <div id="potList" class="chips"></div>
+  </div>
+  <div class="card">
+    <h3>오늘 측정 입력</h3>
+    <div class="row">
+      <label>날짜 <input type="date" id="weighDate"></label>
+      <span class="muted">무게(g)와 측정 후 물을 줬는지 표시</span>
+    </div>
+    <div id="weighGrid" class="weigh-grid"></div>
+    <div class="row"><button id="weighSave">저장</button><span id="weighMsg" class="muted"></span></div>
+  </div>
+  <div class="card">
+    <h3>무게 변화 (첫 측정 대비 %)</h3>
+    <canvas id="weightChart" width="1000" height="360"></canvas>
+    <div class="legend"><span class="lg drought">가뭄</span><span class="lg control">대조</span><span class="lg soil">흙만</span></div>
+    <div class="row">
+      <button id="logExport">CSV 내보내기</button>
+      <label class="file">CSV 불러오기 <input type="file" id="logImport" accept=".csv"></label>
+    </div>
+    <div class="table-wrap"><table id="logTable"></table></div>
+  </div>
+</section>
+
+<!-- 초음파 분석 -->
+<section id="tab-analyze" class="tab">
+  <div class="intro">
+    <h2>초음파 이벤트 검출</h2>
+    <p>녹음기의 WAV 파일을 넣으면 20 kHz 이상 고역통과 → 잡음 수준 추정 → 임계값 초과 지점을 이벤트로 셉니다. 파일은 서버로 올라가지 않고 이 기기에서만 처리됩니다.</p>
+  </div>
+  <div class="card">
+    <div class="row">
+      <label>고역통과 기준 <input type="number" id="cutoff" value="20" min="5" max="150" step="1"> kHz</label>
+      <label>임계값 <input type="number" id="kSigma" value="8" min="3" max="50" step="0.5"> × 잡음σ</label>
+      <label>묶음 간격 <input type="number" id="refr" value="5" min="0.5" max="100" step="0.5"> ms</label>
+      <label>가청화 <select id="expand"><option>10</option><option>20</option><option>5</option></select> 배 느리게</label>
+    </div>
+    <div class="row">
+      <label class="file primary">WAV 파일 선택 (여러 개 가능) <input type="file" id="wavInput" accept=".wav,audio/wav" multiple></label>
+      <button id="makeTest" class="ghost">검증용 합성 파일 분석 (클릭 5개 심음)</button>
+    </div>
+    <p class="muted">파일 이름을 “코드”로 씁니다. 블라인드 판정을 할 때는 팀원이 파일 이름을 무작위 코드로 바꿔서 주세요(통계 탭에서 코드 생성). AudioMoth 기본 이름(20261007_023000.WAV)이면 녹음 시각을 자동으로 읽습니다.</p>
+    <div class="progress"><div id="anaBar"></div></div>
+    <p id="anaMsg" class="muted"></p>
+  </div>
+  <div class="card">
+    <h3>분석 결과 <small class="muted">이 기기에 누적 저장</small></h3>
+    <div class="table-wrap"><table id="anaTable"></table></div>
+    <div class="row">
+      <button id="anaExport">결과 CSV 내보내기</button>
+      <button id="anaClear" class="ghost danger">결과 목록 비우기</button>
+    </div>
+  </div>
+  <div class="card" id="detail" hidden>
+    <h3 id="detailTitle"></h3>
+    <p class="muted" id="detailMeta"></p>
+    <h4>분당 이벤트 수</h4>
+    <canvas id="rateChart" width="1000" height="180"></canvas>
+    <h4>이벤트 목록 <small class="muted">누르면 스펙트로그램과 소리</small></h4>
+    <div class="table-wrap short"><table id="eventTable"></table></div>
+    <div id="eventView" hidden>
+      <canvas id="specCanvas" width="1000" height="260"></canvas>
+      <p class="muted" id="eventInfo"></p>
+      <div class="row">
+        <button id="evPlay">▶ 들어보기</button>
+        <button id="evDownload" class="ghost">가청화 WAV 저장</button>
+        <select id="evCond">
+          <option value="drought">가뭄 토마토</option>
+          <option value="control">물 충분한 토마토</option>
+          <option value="cut">줄기 절단 토마토</option>
+          <option value="noise">배경·잡음</option>
+        </select>
+        <input id="evLabel" placeholder="설명 (예: T3, 관수 중단 4일째 02:30)" size="32">
+        <button id="evAdd">소리 라이브러리에 추가</button>
+      </div>
+    </div>
+    <div class="row"><button id="bgAdd" class="ghost">이 파일의 무작위 배경 구간을 라이브러리에 추가</button></div>
+  </div>
+  <div class="card">
+    <h3>소리 라이브러리 <small class="muted">체험·퀴즈가 여기서 소리를 꺼내 씁니다</small></h3>
+    <div class="row">
+      <label class="file">가청화 WAV 직접 추가 <input type="file" id="libImport" accept=".wav" multiple></label>
+      <select id="libImportCond">
+        <option value="drought">가뭄 토마토</option>
+        <option value="control">물 충분한 토마토</option>
+        <option value="cut">줄기 절단 토마토</option>
+        <option value="noise">배경·잡음</option>
+      </select>
+    </div>
+    <div class="table-wrap short"><table id="libTable"></table></div>
+  </div>
+</section>
+
+<!-- 통계 -->
+<section id="tab-stats" class="tab">
+  <div class="intro">
+    <h2>가설 검정</h2>
+    <p>분석 결과 + 실험 기록 + 블라인드 키를 합쳐 H1–H3을 검정합니다. 표본이 작으므로 p값만 보지 말고 효과크기와 화분별 그래프를 함께 보고하세요.</p>
+  </div>
+  <div class="card">
+    <h3>1. 블라인드 코드 만들기</h3>
+    <p class="muted">화분 × 날짜마다 무작위 코드를 만듭니다. 키 파일은 분석하지 않는 팀원 한 명만 보관하고, 그 사람이 녹음 파일 이름을 코드로 바꿉니다.</p>
+    <div class="row">
+      <label>시작일 <input type="date" id="keyStart" value="2026-10-07"></label>
+      <label>종료일 <input type="date" id="keyEnd" value="2026-10-15"></label>
+      <button id="keyMake">키 CSV 만들기</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>2. 자료 합치기</h3>
+    <div class="row">
+      <label class="file">블라인드 키 CSV (code,pot,date) <input type="file" id="keyImport" accept=".csv"></label>
+      <span id="keyMsg" class="muted">키가 없으면 파일 코드 = 화분 ID, 날짜 = 녹음 시각으로 봅니다.</span>
+    </div>
+    <div class="row">
+      <label>관수 중단일 <input type="date" id="stopDate" value="2026-10-07"></label>
+      <label>재관수일 <input type="date" id="rewaterDate" value="2026-10-13"></label>
+      <button id="runStats">검정 실행</button>
+    </div>
+    <p class="muted">야간 녹음은 정오 이전에 시작했으면 전날 밤 실험일로 셉니다.</p>
+  </div>
+  <div id="statsOut"></div>
+</section>
+
+<!-- 소리 체험 -->
+<section id="tab-listen" class="tab kids">
+  <div class="intro center">
+    <h2>토마토의 목소리를 들어볼까요?</h2>
+    <p>식물이 내는 소리는 너무 높아서 사람 귀에는 안 들려요. 그래서 소리를 <b id="kidExpand">10</b>배 느리게 틀어서 들을 수 있게 만들었어요. 헤드셋을 써 주세요.</p>
+  </div>
+  <div class="kid-buttons">
+    <button class="kid" data-cond="control"><span class="kid-title">물을 충분히 마신 토마토</span><span class="kid-sub">매일 물을 준 화분</span></button>
+    <button class="kid" data-cond="drought"><span class="kid-title">목마른 토마토</span><span class="kid-sub">며칠 동안 물을 못 마신 화분</span></button>
+    <button class="kid" data-cond="cut"><span class="kid-title">줄기가 잘린 토마토</span><span class="kid-sub">줄기를 자른 뒤 녹음</span></button>
+  </div>
+  <canvas id="kidWave" width="1000" height="200"></canvas>
+  <p class="kid-caption" id="kidCaption">버튼을 눌러 보세요.</p>
+  <p class="muted center" id="kidSource"></p>
+</section>
+
+<!-- 청취 퀴즈 -->
+<section id="tab-quiz" class="tab kids">
+  <div class="intro center">
+    <h2>어느 쪽이 목마른 토마토일까?</h2>
+    <p>두 소리를 듣고 골라 주세요. 이름·나이 같은 개인정보는 받지 않고, 정답 여부만 셉니다.</p>
+  </div>
+  <div class="quiz-row">
+    <button class="kid" id="qPlayA"><span class="kid-title">소리 A 듣기</span></button>
+    <button class="kid" id="qPlayB"><span class="kid-title">소리 B 듣기</span></button>
+  </div>
+  <div class="quiz-row">
+    <button class="answer" id="qAnsA">A가 목마른 토마토</button>
+    <button class="answer" id="qAnsB">B가 목마른 토마토</button>
+  </div>
+  <p class="kid-caption" id="qFeedback"></p>
+  <div class="card">
+    <h3>누적 결과</h3>
+    <p id="qStat"></p>
+    <div class="row">
+      <button id="qExport" class="ghost">응답 CSV 내보내기</button>
+      <button id="qReset" class="ghost danger">초기화</button>
+    </div>
+    <p class="muted">관람객 응답을 연구 결과로 쓰려면 사전에 지도교수·학교 연구윤리(IRB) 확인이 필요합니다.</p>
+  </div>
+</section>
+
+<!-- 떨림·반응시간 -->
+<section id="tab-touch" class="tab">
+  <div class="intro">
+    <h2>보조 연구: 태블릿으로 무엇을 어디까지 잴 수 있나</h2>
+    <p>측정 도구 자체를 검증하는 화면입니다. 기준값(가속도계·슬로모션 영상)과 비교하는 절차는 로드맵의 보조 연구 항목을 따르세요.</p>
+  </div>
+  <div class="card">
+    <h3>반응시간</h3>
+    <p class="muted">회색 판이 초록색으로 바뀌면 바로 누르세요. 10회. 앱 기록값에는 화면·터치 지연이 섞여 있으니 240fps 영상으로 따로 보정합니다.</p>
+    <button id="rtPad" class="rt-pad">시작하려면 누르세요</button>
+    <p id="rtStat"></p>
+    <div class="row"><button id="rtExport" class="ghost">CSV 내보내기</button><button id="rtReset" class="ghost danger">초기화</button></div>
+  </div>
+  <div class="card">
+    <h3>터치 떨림 · 샘플링 한계</h3>
+    <p class="muted">“측정 시작” 후 10초 동안 판 위에 손가락(또는 진동 장치를 단 터치펜)을 대고 있으세요. 터치 보고 빈도와 떨림의 주 주파수를 계산합니다.</p>
+    <div class="row"><button id="trStart">측정 시작 (10초)</button><span id="trMsg" class="muted"></span></div>
+    <div id="trPad" class="tr-pad">여기에 손가락을 대세요</div>
+    <canvas id="trChart" width="1000" height="220"></canvas>
+    <p id="trStat"></p>
+    <div class="row"><button id="trExport" class="ghost">원자료 CSV 내보내기</button></div>
+  </div>
+</section>
+
+</main>
+
+<script src="js/dsp.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
